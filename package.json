@@ -1,0 +1,28 @@
+{
+  "name": "pogo-engine",
+  "version": "0.1.0",
+  "description": "A 2D + 3D web game framework built for coding agents and phone-first screens.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/pogo.js",
+  "module": "./dist/pogo.js",
+  "types": "./dist/pogo.d.ts",
+  "exports": { ".": { "types": "./dist/pogo.d.ts", "default": "./dist/pogo.js" } },
+  "bin": { "pogo": "./bin/pogo.js" },
+  "files": ["dist/", "bin/", "template/", "AGENTS.md", "README.md"],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test tests/*.test.js",
+    "test:browser": "npm run build && node tests/browser.mjs",
+    "check:examples": "node bin/pogo.js check examples/hopper.js && node bin/pogo.js check examples/laneblast.js",
+    "dev": "node bin/pogo.js serve ."
+  },
+  "devDependencies": {
+    "dts-bundle-generator": "^9.5.1",
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.50.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": { "node": ">=20" }
+}

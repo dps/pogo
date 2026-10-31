@@ -1,0 +1,104 @@
+// The drawing API handed to draw hooks. All coordinates are local to the entity being drawn, centred on it.
+import { color, Color, ColorLike, mat4, mat4Compose, mat4Mul, toVec, Vec, VecLike } from "../math";
+import type { Entity } from "../entity";
+import type { Game } from "../game";
+import { MeshItem, MODE_SDF, MODE_SOLID, MODE_TEXTURE, TextStyle } from "./backend";
+
+export interface PaintOptions { x?: number; y?: number; color?: ColorLike; opacity?: number; }
+const DEFAULT_FONT = "system-ui, -apple-system, Roboto, sans-serif";
+const WHITE = new Color();
+const scratch = mat4();
+
+export class Draw {
+    private m = new Float32Array([1, 0, 0, 1, 0, 0]);
+    private alpha = 1;
+    private colors = new Map<string, Color>();
+
+    constructor(private game: Game) {}
+    private get r() { return this.game.renderer; }
+
+    private paint(c: ColorLike | undefined, o: PaintOptions) {
+        let col: Color;
+        if (c === undefined) col = WHITE;
+        else if (typeof c === "string") {
+            col = this.colors.get(c) ?? color(c);
+            this.colors.set(c, col);
+        } else col = color(c);
+        return [col.r, col.g, col.b, col.a * this.alpha * (o.opacity ?? 1)];
+    }
+
+    /** @internal */
+    begin(e: Entity) {
+        const w = e.world, m = this.m;
+        m[0] = w[0]; m[1] = w[1]; m[2] = w[4]; m[3] = w[5]; m[4] = w[12]; m[5] = w[13];
+        this.alpha = e._opacity;
+    }
+    /** @internal Back to an untransformed, fully opaque state. */
+    reset() {
+        this.m.set([1, 0, 0, 1, 0, 0]);
+        this.alpha = 1;
+    }
+
+    rect(w: number, h: number, o: PaintOptions & { radius?: number; outline?: number } = {}) {
+        const [r, g, b, a] = this.paint(o.color, o), x = o.x ?? 0, y = o.y ?? 0, hw = w / 2, hh = h / 2, pad = 1.5;
+        this.r.quad(this.m, x - hw - pad, y - hh - pad, x + hw + pad, y + hh + pad, -hw - pad, -hh - pad, hw + pad, hh + pad, r, g, b, a, null, MODE_SDF, hw, hh, Math.min(o.radius ?? 0, hw, hh), o.outline ?? 0);
+    }
+    circle(radius: number, o: PaintOptions & { outline?: number } = {}) {
+        this.rect(radius * 2, radius * 2, { ...o, radius });
+    }
+    /** A line between two local points. */
+    line(a: VecLike, b: VecLike, o: PaintOptions & { width?: number } = {}) {
+        const p = toVec(a), q = toVec(b), d = q.sub(p), len = d.len();
+        if (len === 0) return;
+        const n = new Vec(-d.y / len, d.x / len).mul((o.width ?? 2) / 2), [r, g, bl, al] = this.paint(o.color, o);
+        this.r.tris(this.m, [p.x + n.x, p.y + n.y, q.x + n.x, q.y + n.y, q.x - n.x, q.y - n.y, p.x + n.x, p.y + n.y, q.x - n.x, q.y - n.y, p.x - n.x, p.y - n.y], r, g, bl, al);
+    }
+    /** A filled convex polygon. */
+    poly(points: VecLike[], o: PaintOptions = {}) {
+        const pts = points.map(toVec), out: number[] = [], [r, g, b, a] = this.paint(o.color, o);
+        for (let i = 1; i < pts.length - 1; i++) out.push(pts[0].x, pts[0].y, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
+        this.r.tris(this.m, out, r, g, b, a);
+    }
+    sprite(name: string, o: PaintOptions & { frame?: number; width?: number; height?: number; flipX?: boolean } = {}) {
+        const asset = this.game.assets.sprite(name);
+        const frame = (o.frame ?? 0) % (asset.cols * asset.rows), col = frame % asset.cols, row = Math.floor(frame / asset.cols);
+        const w = o.width ?? asset.frameW, h = o.height ?? asset.frameH, x = o.x ?? 0, y = o.y ?? 0;
+        const u0 = col / asset.cols, v0 = row / asset.rows, u1 = (col + 1) / asset.cols, v1 = (row + 1) / asset.rows;
+        const [r, g, b, a] = this.paint(o.color, o);
+        const flip = !!o.flipX;
+        this.r.quad(this.m, x - w / 2, y - h / 2, x + w / 2, y + h / 2, flip ? u1 : u0, v0, flip ? u0 : u1, v1, r, g, b, a, this.r.texture(asset), MODE_TEXTURE, 0, 0, 0, 0);
+    }
+    text(str: string | number, o: PaintOptions & Partial<TextStyle> = {}) {
+        const style: TextStyle = { size: o.size ?? 20, font: o.font ?? DEFAULT_FONT, bold: o.bold ?? false, align: o.align ?? "center", maxWidth: o.maxWidth ?? 0, lineHeight: o.lineHeight ?? 1.25 };
+        const t = this.r.text(String(str), style), x = o.x ?? 0, y = o.y ?? 0;
+        const [r, g, b, a] = this.paint(o.color, o);
+        this.r.quad(this.m, x - t.width / 2, y - t.height / 2, x + t.width / 2, y + t.height / 2, 0, 0, 1, 1, r, g, b, a, t.tex, MODE_TEXTURE, 0, 0, 0, 0);
+    }
+
+    /** @internal Queue a mesh for the 3D pass. */
+    mesh(name: string, world: Float32Array, o: { size: Vec; color: Color; texture?: string | null; unlit?: boolean; castShadow?: boolean }) {
+        const geom = this.game.assets.geometry(name), n = geom.natural;
+        const fit = (s: number, w: number) => (w > 1e-6 ? s / w : 1);
+        const matrix = new Float32Array(16);
+        mat4Mul(matrix, world, mat4Compose(scratch, ZERO, ZERO, new Vec(fit(o.size.x, n.x), fit(o.size.y, n.y), fit(o.size.z, n.z))));
+        this.r.mesh(item(geom, matrix, o.color, this.alpha, o.texture ? this.game.assets.sprite(o.texture) : null, o.unlit, o.castShadow ?? true));
+    }
+    /** @internal */
+    billboard(name: string, e: Entity, o: { frame: number; color: Color; unlit: boolean }) {
+        const asset = this.game.assets.sprite(name), geom = this.game.assets.geometry("quad"), cam = e.scene.cam3;
+        cam.update(this.game._alpha);
+        const p = new Vec(e.world[12], e.world[13], e.world[14]);
+        const yaw = Math.atan2(cam.eye.x - p.x, cam.eye.z - p.z);
+        const matrix = mat4Compose(new Float32Array(16), p, new Vec(0, yaw, 0), new Vec(e.size.x * e.scale.x, e.size.y * e.scale.y, 1));
+        const it = item(geom, matrix, o.color, this.alpha, asset, o.unlit, false);
+        const frame = o.frame % (asset.cols * asset.rows), col = frame % asset.cols, row = Math.floor(frame / asset.cols);
+        it.u0 = col / asset.cols; it.v0 = row / asset.rows; it.u1 = (col + 1) / asset.cols; it.v1 = (row + 1) / asset.rows;
+        it.cutout = true;
+        this.r.mesh(it);
+    }
+}
+
+const ZERO = new Vec();
+function item(geom: MeshItem["geom"], matrix: Float32Array, c: Color, alpha: number, texture: MeshItem["texture"], unlit = false, castShadow = true): MeshItem {
+    return { geom, matrix, r: c.r, g: c.g, b: c.b, a: c.a * alpha, texture, u0: 0, v0: 0, u1: 1, v1: 1, unlit, castShadow, cutout: false };
+}
