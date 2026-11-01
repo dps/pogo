@@ -52,12 +52,18 @@ const FS_3D = `#version 300 es
 precision highp float; precision highp sampler2DShadow;
 in vec3 v_nor; in vec3 v_w; in vec2 v_uv; in vec4 v_col; in vec3 v_s;
 uniform sampler2D u_tex; uniform sampler2DShadow u_shadow;
-uniform float u_useTex, u_unlit, u_shadows, u_texel, u_cutout;
+uniform float u_useTex, u_unlit, u_shadows, u_texel, u_cutout, u_shine, u_soft;
 uniform vec3 u_sun, u_sunCol, u_sky, u_ground, u_fogCol, u_eye; uniform vec2 u_fog;
 out vec4 o;
 float shadow(){
   if (u_shadows < .5 || v_s.x<0.||v_s.x>1.||v_s.y<0.||v_s.y>1.||v_s.z>1.) return 1.;
   float t=u_texel, z=v_s.z-.0015;
+  if (u_soft > .5) {
+    const vec2 p[8] = vec2[8](vec2(-.94,-.4),vec2(.95,-.77),vec2(-.09,-.93),vec2(.34,.29),vec2(-.92,.46),vec2(.44,.9),vec2(-.38,.92),vec2(.54,-.3));
+    float a = fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)*6.2832, c=cos(a), s=sin(a), sum=0.;
+    for (int i=0;i<8;i++) sum += texture(u_shadow,vec3(v_s.xy+mat2(c,s,-s,c)*p[i]*t*3.,z));
+    return sum*.125;
+  }
   return (texture(u_shadow,vec3(v_s.xy+vec2(-t,-t),z))+texture(u_shadow,vec3(v_s.xy+vec2(t,-t),z))
          +texture(u_shadow,vec3(v_s.xy+vec2(-t,t),z))+texture(u_shadow,vec3(v_s.xy+vec2(t,t),z)))*.25;
 }
@@ -67,8 +73,14 @@ void main(){
   vec3 c = base.rgb;
   if (u_unlit < .5) {
     vec3 n = normalize(v_nor);
-    float diff = max(dot(n,-u_sun),0.);
-    c *= mix(u_ground,u_sky,n.y*.5+.5) + u_sunCol*diff*shadow();
+    float diff = max(dot(n,-u_sun),0.), lit = shadow();
+    c *= mix(u_ground,u_sky,n.y*.5+.5) + u_sunCol*diff*lit;
+    if (u_shine > 0.) {
+      vec3 v = normalize(u_eye-v_w), r = reflect(-v,n);
+      float spec = pow(max(dot(n,normalize(v-u_sun)),0.),mix(14.,180.,u_shine))*step(0.,diff);
+      float rim = pow(1.-max(dot(n,v),0.),4.);
+      c += u_sunCol*spec*lit*u_shine*1.4 + mix(u_ground,u_sky,r.y*.5+.5)*rim*u_shine*.7;
+    }
     if (u_fog.y > 0.) c = mix(c,u_fogCol,smoothstep(u_fog.x,u_fog.y,distance(v_w,u_eye)));
   }
   o = vec4(c*base.a, base.a);
@@ -82,10 +94,10 @@ const FS_DEPTH = `#version 300 es
 precision lowp float; void main(){}`;
 
 const MAX_QUADS = 4096, FLOATS_2D = 10, VERTS_2D = MAX_QUADS * 6, FLOATS_INSTANCE = 24;
-const SHADOW_SIZE = 1024, TEXT_CACHE = 256;
+const SHADOW_SIZE = 2048, TEXT_CACHE = 1024;
 
 type Program = { p: WebGLProgram; u: Record<string, WebGLUniformLocation | null> };
-type Bucket = { geom: Geometry; tex: SpriteAsset | null; unlit: boolean; cutout: boolean; start: number; count: number; casters: number };
+type Bucket = { geom: Geometry; tex: SpriteAsset | null; unlit: boolean; cutout: boolean; shine: number; start: number; count: number; casters: number };
 
 export class GLRenderer implements Renderer {
     readonly kind = "gl" as const;
@@ -111,7 +123,7 @@ export class GLRenderer implements Renderer {
     private view!: ViewState;
     private items: MeshItem[] = [];
     private instances = new Float32Array(FLOATS_INSTANCE * 2048);
-    private geoms = new Map<Geometry, { vao: WebGLVertexArrayObject; count: number }>();
+    private geoms = new Map<Geometry, { vao: WebGLVertexArrayObject; vb: WebGLBuffer; ib: WebGLBuffer; count: number }>();
     private textures = new Map<SpriteAsset, { tex: WebGLTexture; loaded: boolean }>();
     private textCache = new Map<string, TextHandle>();
     private measurer: CanvasRenderingContext2D;
@@ -136,7 +148,7 @@ export class GLRenderer implements Renderer {
         this.textures.clear();
         this.textCache.clear();
         this.p2 = this.program(VS_2D, FS_2D, ["u_cam", "u_off", "u_res", "u_tex"]);
-        this.p3 = this.program(VS_3D, FS_3D, ["u_vp", "u_light", "u_tex", "u_shadow", "u_useTex", "u_unlit", "u_shadows", "u_texel", "u_cutout", "u_sun", "u_sunCol", "u_sky", "u_ground", "u_fogCol", "u_eye", "u_fog"]);
+        this.p3 = this.program(VS_3D, FS_3D, ["u_vp", "u_light", "u_tex", "u_shadow", "u_useTex", "u_unlit", "u_shadows", "u_texel", "u_cutout", "u_shine", "u_soft", "u_sun", "u_sunCol", "u_sky", "u_ground", "u_fogCol", "u_eye", "u_fog"]);
         this.pd = this.program(VS_DEPTH, FS_DEPTH, ["u_light"]);
 
         this.vao2 = gl.createVertexArray()!;
@@ -238,6 +250,15 @@ export class GLRenderer implements Renderer {
     // --- 3D -------------------------------------------------------------------------
     mesh(item: MeshItem) { this.items.push(item); }
 
+    freeGeometry(g: Geometry) {
+        const info = this.geoms.get(g);
+        if (!info) return;
+        this.gl.deleteVertexArray(info.vao);
+        this.gl.deleteBuffer(info.vb);
+        this.gl.deleteBuffer(info.ib);
+        this.geoms.delete(g);
+    }
+
     private geom(g: Geometry) {
         let info = this.geoms.get(g);
         if (info) return info;
@@ -254,7 +275,7 @@ export class GLRenderer implements Renderer {
         gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 3, gl.FLOAT, false, s, 32);
         for (let i = 4; i <= 9; i++) { gl.enableVertexAttribArray(i); gl.vertexAttribDivisor(i, 1); }
         gl.bindVertexArray(null);
-        info = { vao, count: g.indices.length };
+        info = { vao, vb, ib, count: g.indices.length };
         this.geoms.set(g, info);
         return info;
     }
@@ -278,7 +299,7 @@ export class GLRenderer implements Renderer {
                 clear.push({ it, depth: dx * dx + dy * dy + dz * dz });
                 continue;
             }
-            const key = `${it.geom.id}|${it.texture?.name ?? ""}|${it.unlit}|${it.cutout}`;
+            const key = `${it.geom.id}|${it.texture?.name ?? ""}|${it.unlit}|${it.cutout}|${it.shine}`;
             let g = groups.get(key);
             if (!g) groups.set(key, (g = []));
             g.push(it);
@@ -298,13 +319,13 @@ export class GLRenderer implements Renderer {
             g.sort((a, b) => +b.castShadow - +a.castShadow);
             const it = g[0], start = n;
             for (const x of g) write(x);
-            buckets.push({ geom: it.geom, tex: it.texture, unlit: it.unlit, cutout: it.cutout, start, count: g.length, casters: g.filter((x) => x.castShadow).length });
+            buckets.push({ geom: it.geom, tex: it.texture, unlit: it.unlit, cutout: it.cutout, shine: it.shine, start, count: g.length, casters: g.filter((x) => x.castShadow).length });
         }
         const opaque = buckets.length;
         for (const { it } of clear) {
             const start = n;
             write(it);
-            buckets.push({ geom: it.geom, tex: it.texture, unlit: it.unlit, cutout: it.cutout, start, count: 1, casters: 0 });
+            buckets.push({ geom: it.geom, tex: it.texture, unlit: it.unlit, cutout: it.cutout, shine: it.shine, start, count: 1, casters: 0 });
         }
         gl.bindBuffer(gl.ARRAY_BUFFER, this.instBuf);
         gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, n * FLOATS_INSTANCE), gl.STREAM_DRAW);
@@ -332,7 +353,8 @@ export class GLRenderer implements Renderer {
         gl.uniform3f(u.u_fogCol, f?.color.r ?? 0, f?.color.g ?? 0, f?.color.b ?? 0);
         gl.uniform2f(u.u_fog, f?.near ?? 0, f?.far ?? 0);
         gl.uniform1f(u.u_shadows, useShadows ? 1 : 0);
-        gl.uniform1f(u.u_texel, 0.75 / SHADOW_SIZE);
+        gl.uniform1f(u.u_texel, 1.5 / SHADOW_SIZE);
+        gl.uniform1f(u.u_soft, light.softShadows ? 1 : 0);
         gl.uniform1i(u.u_tex, 0);
         gl.uniform1i(u.u_shadow, 1);
         gl.activeTexture(gl.TEXTURE1);
@@ -348,6 +370,7 @@ export class GLRenderer implements Renderer {
             gl.uniform1f(u.u_useTex, b.tex ? 1 : 0);
             gl.uniform1f(u.u_unlit, b.unlit ? 1 : 0);
             gl.uniform1f(u.u_cutout, b.cutout ? 1 : 0);
+            gl.uniform1f(u.u_shine, b.shine);
             if (b.cutout) gl.disable(gl.CULL_FACE);
             if (b.tex) gl.bindTexture(gl.TEXTURE_2D, this.texture(b.tex) as WebGLTexture);
             gl.drawElementsInstanced(gl.TRIANGLES, info.count, gl.UNSIGNED_INT, 0, b.count);
@@ -443,6 +466,20 @@ export class GLRenderer implements Renderer {
         }
     }
 
+    clip(x: number | null, y = 0, w = 0, h = 0) {
+        this.flush();
+        const gl = this.gl, [vx, vy, vw, vh] = this.vp;
+        if (x === null) { gl.scissor(vx, vy, vw, vh); return; }
+        const sx = vw / this.view.width, sy = vh / this.view.height;
+        gl.scissor(Math.round(vx + x * sx), Math.round(vy + vh - (y + h) * sy), Math.round(w * sx), Math.round(h * sy));
+    }
+
+    blend(additive: boolean) {
+        this.flush();
+        const gl = this.gl;
+        gl.blendFunc(gl.ONE, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+    }
+
     private flush() {
         if (!this.n2 || this.lost) { this.n2 = 0; return; }
         const gl = this.gl, u = this.p2.u, c = this.cam2;
@@ -461,6 +498,18 @@ export class GLRenderer implements Renderer {
         gl.bindVertexArray(null);
         this.stats.drawCalls++;
         this.n2 = 0;
+    }
+
+    refresh(asset: SpriteAsset) {
+        const t = this.textures.get(asset);
+        if (t) t.loaded = false;
+    }
+    freeTexture(asset: SpriteAsset) {
+        const t = this.textures.get(asset);
+        if (!t) return;
+        this.flush();
+        this.gl.deleteTexture(t.tex);
+        this.textures.delete(asset);
     }
 
     texture(asset: SpriteAsset): unknown {

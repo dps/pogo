@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#cfe3c0">
+<link rel="icon" href="data:,">
+<title>Gran's Garden Wall</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #e9dfc6; }
+  #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #4a3423; font: italic 18px Georgia, "Iowan Old Style", serif; text-align: center; }
+  #loading b { font-size: 30px; font-style: normal; }
+  #loading i { display: block; width: 180px; height: 6px; border-radius: 3px; background: #4a342322; overflow: hidden; }
+  #loading i u { display: block; height: 100%; width: 0; background: #5f8a4b; }
+</style>
+</head>
+<body>
+<div id="loading"><b>Gran's Garden Wall</b><span>Gran is putting the kettle on&hellip;</span><i><u id="bar"></u></i></div>
+<script type="module" src="./game.js"></script>
+</body>
+</html>

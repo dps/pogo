@@ -18,6 +18,7 @@ export interface MeshItem {
     unlit: boolean;
     castShadow: boolean;
     cutout: boolean;
+    shine: number;
 }
 
 export interface Light3D {
@@ -27,6 +28,8 @@ export interface Light3D {
     sky: Color;
     ground: Color;
     shadows: boolean;
+    /** Wider, smoother shadow edges for close-up scenes. Costs more per pixel. */
+    softShadows: boolean;
     /** World radius around the camera target that receives shadows. */
     shadowRange: number;
     fog: { color: Color; near: number; far: number } | null;
@@ -43,8 +46,16 @@ export interface Renderer {
     begin2D(camera: Float32Array | null): void;
     quad(m: Float32Array, x0: number, y0: number, x1: number, y1: number, u0: number, v0: number, u1: number, v1: number, r: number, g: number, b: number, a: number, tex: unknown, mode: number, p0: number, p1: number, p2: number, p3: number): void;
     tris(m: Float32Array, pts: number[], r: number, g: number, b: number, a: number): void;
+    blend(additive: boolean): void;
+    /** Clip to a rectangle in view units, or stop clipping with null. */
+    clip(x: number | null, y?: number, w?: number, h?: number): void;
     endFrame(): void;
     texture(asset: SpriteAsset): unknown;
+    /** Upload an asset's pixels again. */
+    refresh(asset: SpriteAsset): void;
+    /** Release GPU memory. */
+    freeGeometry(g: Geometry): void;
+    freeTexture(asset: SpriteAsset): void;
     text(str: string, style: TextStyle): TextHandle;
     measureText(str: string, style: TextStyle): TextLayout;
     screenshot(): string | null;
@@ -81,8 +92,13 @@ export class NullRenderer implements Renderer {
     begin2D() {}
     quad() { this.stats.quads++; }
     tris() {}
+    blend() {}
+    clip() {}
     endFrame() {}
     texture() { return null; }
+    refresh() {}
+    freeGeometry() {}
+    freeTexture() {}
     measureText(str: string, style: TextStyle) { return layoutText(str, style, estimateLine(style)); }
     text(str: string, style: TextStyle): TextHandle { const m = this.measureText(str, style); return { tex: null, width: m.width, height: m.height }; }
     screenshot() { return null; }

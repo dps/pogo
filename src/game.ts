@@ -3,6 +3,7 @@ import { Assets } from "./assets";
 import { Audio, Sfx, Song } from "./audio";
 import { audit, AuditIssue, ascii, snapshot } from "./agent";
 import { PogoError, suggest } from "./errors";
+import { Haptic, Haptics } from "./haptics";
 import { Input } from "./input";
 import { color, Color, ColorLike, Rng } from "./math";
 import { NullRenderer, Renderer } from "./render/backend";
@@ -41,6 +42,8 @@ export interface GameOptions {
     screen?: keyof typeof DEVICES | ScreenInfo;
     /** Draw collider outlines. Also enabled by ?debug in the URL. */
     debug?: boolean;
+    /** Haptic feedback. Default true; false turns it off, { auto: false } leaves only game.haptic() calls. */
+    haptics?: boolean | { auto?: boolean };
 }
 
 export type SceneFn = (s: Scene, args: any) => void;
@@ -52,6 +55,7 @@ export class Game {
     readonly touch: TouchControls;
     readonly assets: Assets;
     readonly audio: Audio;
+    readonly haptics: Haptics;
     /** Gameplay randomness. Same seed, same sequence. */
     rng: Rng;
     /** Cosmetic randomness, separate so that effects never change gameplay. */
@@ -71,6 +75,8 @@ export class Game {
     letterbox: Color;
     /** @internal */
     _alpha = 1;
+    /** How far the current frame sits between the last two steps, 0 to 1, for smoothing custom draws. */
+    get alpha() { return this._alpha; }
     private _mouseLook = false;
 
     private scenes = new Map<string, SceneFn>();
@@ -104,6 +110,7 @@ export class Game {
         this.touch = new TouchControls(this, options.touch ?? {});
         this.assets = new Assets(this);
         this.audio = new Audio(this);
+        this.haptics = new Haptics(this, options.haptics);
         this.input = new Input(this, options.actions);
         this.draw = new Draw(this);
 
@@ -150,6 +157,7 @@ export class Game {
         this.nextScene = null;
         this.input.reset();
         this.input.used.clear();
+        this.current?.emit("leave");
         this.current = new Scene(this, n.name);
         this.currentName = n.name;
         this.currentArgs = n.args;
@@ -297,11 +305,13 @@ export class Game {
 
     // --- Services -----------------------------------------------------------------------------
     /** Play a sound effect: a preset name, a loaded sound, or a custom tone. */
-    sfx(sound: string | Sfx) { this.audio.play(sound); }
+    sfx(sound: string | Sfx, o?: { haptic?: Haptic }) { this.audio.play(sound, o); }
     music(song: Song) { this.audio.playMusic(song); }
     stopMusic() { this.audio.stopMusic(); }
     /** Haptic pulse on phones that support it. */
-    vibrate(ms: number | number[] = 12) { try { if (typeof navigator !== "undefined") navigator.vibrate?.(ms); } catch { /* blocked by the embedder */ } }
+    vibrate(ms: number | number[] = 12) { this.haptics.play(ms); }
+    /** Pulse: "tick light medium heavy success warn error", a length in ms, or a pattern. */
+    haptic(kind?: Haptic) { this.haptics.play(kind); }
 
     /** Persist a JSON value. Web views can block storage, so this falls back to memory. */
     save(key: string, value: unknown) {

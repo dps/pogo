@@ -1,0 +1,4 @@
+import { Commander } from "../ai.js"; import { MISSION_MAPS, skirmishMap } from "../maps.js"; import { makeSim } from "./simcheck.mjs";
+const m = Number(process.argv[2] ?? 12), map = m ? MISSION_MAPS[m - 1]() : skirmishMap({ map: "lawn", size: 1, enemies: 1, level: 3, hazards: false, seed: 10, strategies: [[process.argv[3] ?? "rusher", 1]] }), sim = makeSim(map, 3); sim.brains.push(new Commander(sim, { wave: 50 }));
+for (let i = 0; i < 12000 && !sim.outcome; i++) { sim.tick(); if (i % 300 === 0) console.log(Math.round(sim.seconds) + "s", sim.colList.map((c) => `T${c.team} hp${Math.round(c.hp)} ${c.counts} st ${c.stock.map(Math.floor)} ch ${Object.values(c.chambers).join("")} sv ${c.saving ?? "-"} tr ${c.trails().map((t) => "GAD"[t.kind] + (t.food?.k ?? "") + t.w).join(",")}`).join("  |  ")); }
+console.log(sim.outcome, sim.reason, sim.seconds);

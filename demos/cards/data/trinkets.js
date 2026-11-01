@@ -1,0 +1,48 @@
+// Trinkets: passive relics. Hooks get t = { run, c, x, m } where m is this trinket's saved memory.
+export const TRINKETS = {};
+const T = (id, name, rar, text, art, hooks = {}, o = {}) => { TRINKETS[id] = { id, name, rar, text, art, hooks, ...o }; };
+const A = "common", B = "uncommon", R = "rare", X = "boss";
+
+T("thimble", "Brass Thimble", A, "Start each fight with 6 Ward.", ["ring", "#d9a648"], { combatStart: (t) => { t.c.p.ward += 6; } });
+T("wishbone", "Lucky Wishbone", A, "+1 Heat on your first turn of each fight.", ["bone", "#f2e6c8"], { combatStart: (t) => { t.c.heatBonusFirst = 1; } });
+T("spoon2", "Second Spoon", A, "The first ingredient of each brew counts ×1.5.", ["spoon", "#c7d3df"], { brewStart: (t) => t.x.nextMul(1.5) });
+T("sugarcube", "Sugar Cube", B, "The last ingredient of each brew counts ×2.", ["crystal", "#fff4e0"], { beforeFire: (t) => { if (t.x.last && !t.x.refiring) t.x.mult *= 2; } });
+T("copperkettle", "Copper Kettle", A, "Steam also gives Ward 3.", ["kettle", "#d9793c"], { onReaction: (t, key) => { if (key === "ember>brine") t.x.ward(3); } });
+T("oldbellows", "Old Bellows", B, "Each brew starts with +0.25 Potency.", ["bellows", "#a0693c"], { brewStart: (t) => t.x.pot(0.25) });
+T("emberlocket", "Ember Locket", A, "The first Ember of each brew also Burns 2.", ["heart", "#ff7a2f"], { brewStart: (t) => { t.m.done = 0; }, afterFire: (t, card) => { if (card.el === "ember" && !t.m.done) { t.m.done = 1; t.x.burn(2); } } });
+T("slug", "Salted Slug", A, "Heal 3 after each fight.", ["kelp", "#c6d97c"], { combatEnd: (t) => t.api.heal(3) });
+T("hourglass", "Cracked Hourglass", B, "The first reaction of each brew happens twice.", ["hourglass", "#e0c080"], { brewStart: (t) => { t.m.done = 0; }, onReaction: (t, key, rx) => { if (!t.m.done) { t.m.done = 1; rx.fx(t.x); } } });
+T("mothlantern", "Moth Lantern", B, "Draw 1 more card each turn.", ["candle", "#ffe08a"], {}, { draw: 1 });
+T("mobiusladle", "Ouroboros Ladle", R, "Reflux nests two levels deeper.", ["snake", "#7ef0c8"], { brewStart: (t) => t.x.deeper(2) });
+T("thricespoon", "Thrice-Stirred Spoon", B, "Every 3rd ingredient fired adds +0.25 Potency.", ["spoon", "#ffd27a"], { afterFire: (t) => { if (t.x.fires % 3 === 0) t.x.pot(0.25); } });
+T("fattoad", "Fat Toad", A, "+10 Max HP.", ["toad", "#7fbf58"], { pickup: (t) => { t.run.maxHp += 10; t.run.hp += 10; } });
+T("pocketmoon", "Pocket Moon", B, "Whenever you Hex, also Doom 3.", ["moon", "#d7c8ff"], { onStatus: (t, k) => { if (k === "hex") t.x.doomQuiet(3); } });
+T("bonedice", "Bone Dice", A, "Card rewards offer 1 more choice.", ["dice", "#efe3c4"], {}, { rewardCards: 1 });
+T("coupons", "Coupon Book", A, "Shops are 20% cheaper.", ["book", "#e7b75e"], {}, { shopMult: 0.8 });
+T("goldtooth2", "Gold Filling", A, "+30% gold from fights.", ["tooth", "#ffd24a"], {}, { goldMult: 1.3 });
+T("snuffbox", "Snuffbox", B, "Gunk in the pot adds +0.75 Potency when it fires.", ["pouch", "#9a8b5a"], { afterFire: (t, card) => { if (card.el === "gunk") t.x.pot(0.75); } });
+T("campkettle", "Camp Kettle", A, "Resting heals 15% more.", ["teacup", "#e88a4a"], {}, { restBonus: 0.15 });
+T("blackcandle", "Black Candle", X, "+1 Heat each turn. Lose 2 HP at the end of each fight.", ["candle", "#6d3ba8"], { combatEnd: (t) => t.api.lose(2) }, { heat: 1 });
+T("bottledstorm", "Bottled Storm", B, "Brews of 5 or more ingredients deal 10 to ALL.", ["flask", "#7ad1ff"], { brewEnd: (t) => { if (t.x.tokens.length >= 5) t.x.aoe(10); } });
+T("familiarrat", "Pocket Rat", B, "Your rightmost card stays in hand each turn.", ["rat", "#a08a78"], {}, { keepOne: 1 });
+T("witchhazel", "Witch Hazel", A, "Every Moss reaction heals 1.", ["flower", "#c6e86a"], { onReaction: (t, key) => { if (key.includes("moss")) t.api.healQuiet(1); } });
+T("frostthimble", "Frost Thimble", B, "Half your Ward lasts into the next turn.", ["crystal", "#bfeaff"], {}, { wardKeep: 0.5 });
+T("rimebrooch", "Rime Brooch", A, "Each fight starts with Chill 1 on all foes.", ["snow", "#d4f2ff"], { combatStart: (t) => { for (const e of t.c.enemies) e.st.chill = (e.st.chill ?? 0) + 1; } });
+T("alchnotes", "Alchemist's Notes", R, "Reactions also add +0.25 Potency.", ["book", "#ffb347"], { onReaction: (t) => t.x.pot(0.25) });
+T("whisker", "Cat's Whisker", B, "The first ingredient each turn costs 0.", ["cat", "#2b2438"], {}, { firstFree: 1 });
+T("coldspoon", "Cold Spoon", A, "Simmer reactions add +0.25 more Potency.", ["spoon", "#a9dcf5"], { onReaction: (t, key) => { const [a, b] = key.split(">"); if (a === b) t.x.pot(0.25); } });
+T("burntrecipe", "Burnt Recipe", B, "The first time each reaction happens in a fight, draw 1 next turn.", ["book", "#c0562e"], { combatStart: (t) => { t.m.seen = {}; }, onReaction: (t, key) => { if (!t.m.seen[key]) { t.m.seen[key] = 1; t.c.drawExtra = Math.min(3, (t.c.drawExtra ?? 0) + 1); } } });
+T("extension", "Cast-Iron Rim", B, "+1 space in the pot.", ["ring", "#6b6f7c"], {}, { cap: 1 });
+T("bigpot", "The Big Pot", X, "+2 spaces in the pot. Draw 1 fewer card on your first turn.", ["kettle", "#3f4453"], { combatStart: (t) => { t.c.firstDrawPenalty = 1; } }, { cap: 2 });
+T("revive", "Bottled Familiar", R, "Once, when you would die, heal to 30% instead.", ["flask", "#ff8ab0"], {}, {});
+T("leadlid", "Lead Lid", X, "+1 Heat each turn. You can't rest at campfires.", ["shield", "#7c8294"], {}, { heat: 1, noRest: 1 });
+T("grindstone", "Grinding Stone", A, "When found, Refine 2 random cards.", ["orb", "#9aa0ad"], { pickup: (t) => t.api.upgradeRandom(2) });
+T("crowfeather", "Crow's Feather", B, "The second time you brew each fight, draw 2 next turn.", ["feather", "#3b3550"], { brewEnd: (t) => { if (t.c.brews === 2) t.x.drawNext(2); } });
+T("heatstone", "Heat Stone", R, "If you end a turn with unspent Heat, keep 1 of it.", ["coal", "#ff9a4a"], {}, { keepHeat: 1 });
+T("tastingnotes", "Tasting Notes", R, "Each reaction adds +1 flat damage and Ward for the rest of the brew.", ["feather", "#ffd27a"], { onReaction: (t) => { t.x.flat += 1; } });
+T("cursedcoin", "Cursed Coin", X, "Gain 200 gold. Each fight starts with a Gunk in your hand.", ["coin", "#b45cff"], { pickup: (t) => t.api.gold(200), combatStart: (t) => t.api.addToHand("gunk") });
+T("giantspoon", "Giant's Spoon", X, "Each brew starts with +0.75 Potency.", ["spoon", "#ffe066"], { brewStart: (t) => t.x.pot(0.75) });
+// Witch trinkets: only Posy, Thistle or Vesper find these.
+T("sparewick", "Spare Wick", R, "Posy only: Flare on every 2nd Ember.", ["match", "#ff7a2f"], {}, { witch: "posy" });
+T("stewpot", "Bottomless Stewpot", R, "Thistle only: Old Stock grows 50% a turn, up to ×3.", ["kettle", "#6fce46"], {}, { witch: "thistle" });
+T("mobius", "Möbius Band", R, "Vesper only: the Ring turns twice.", ["ring", "#b45cff"], {}, { witch: "vesper" });

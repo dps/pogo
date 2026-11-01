@@ -1,0 +1,55 @@
+// Words. Patients are short and silly on purpose: nobody reads a wall of text inside a mouth.
+export const NPC = {
+    gus: { name: "Gus Gingiva", lines: ["You're the dentist? You're so small.", "Good. The big ones never fit.", "Take that drill. Hold it at the wall. Walls hate that."], cure: "He flosses now. Out of fear." },
+    wally: { name: "Wally Wet", lines: ["Stuck in the chimney? Jump at a wall, then jump off it.", "I've been doing it for years.", "Nobody has asked me why."], cure: "He has moved to a nicer chimney." },
+    mabel: { name: "Mabel Bitewing", lines: ["My grandson went down the drain pipe.", "He says the swamp has 'character'.", "It has fungus. I've seen his socks."], cure: "She sent the socks to be burned." },
+    mort: { name: "Old Mort Amalgam", lines: ["I've been in this filling since 1962.", "They said it would last a lifetime.", "They did not say whose."], cure: "He's been told he's a landmark." },
+    fairy: { name: "The Tooth Fairy", lines: ["Don't look at me. I'm on my break.", "Bring me baby teeth. Five at a time.", "I pay in gold crowns. No, I can't explain the economics."], cure: "" },
+    enid: { name: "Enid Enamel", lines: ["Mind the floor. I polished it.", "I polished you too, while you were looking away.", "Shine is a state of mind."], cure: "She has been offered a job in a mirror." },
+    dot: { name: "Dot Wisdom", lines: ["I came in late and there was no room.", "I've been sideways for eleven years.", "They call me Wisdom. I've learned nothing."], cure: "She's upright! Briefly!" },
+    cuspid: { name: "Cuspid the Elder", lines: ["The Ache came from below, they say.", "Or above. It's a very confusing mouth.", "Follow the pain. Everyone does."], cure: "He wrote this down and lost it." },
+    lolly: { name: "Lolly Crystal", lines: ["Isn't it pretty? It's all pure decay!", "I licked a wall in 2009.", "I can hear colours now."], cure: "She'd like you to know the walls are listening." },
+    fizz: { name: "Fizz Sherbet", lines: ["Queen Caramelita is just behind me.", "She's very sweet. It's the problem.", "If you see a mouthwash bottle, take it. I'm scared of it."], cure: "He has taken up sparkling." },
+    chip: { name: "Chip the Doorman", lines: ["That door's tartar. Solid. Older than the giant.", "Only a Diamond Burr gets through it.", "Yes, I know a door needs a doorman. Thank you for asking."], cure: "He's opened up." },
+    salty: { name: "Dr. Salty", lines: ["I run the taste lab.", "So far: salty. Sweet. Sad.", "We've got funding for one more."], cure: "Umami has been approved." },
+    bud: { name: "Bud Fungiform", lines: ["Bounce on the pads! Hold jump to go higher!", "We used to taste things.", "Now it's mostly mornings."], cure: "He tasted a whole grape. He cried." },
+    mint: { name: "Minty Frenulum", lines: ["Under here it's lovely and damp.", "I heard your Air Syringe lets you jump on nothing.", "I've been jumping on nothing for years, emotionally."], cure: "She's feeling fresher." },
+    bog: { name: "Bog Standard", lines: ["The plaque's fine once you stop breathing.", "Her Majesty, the Mother of Film, keeps to the west.", "Don't touch the green. Or the other green."], cure: "He has been upgraded to Bog Deluxe." },
+    crusty: { name: "Crusty Carl", lines: ["That acid eats dentists.", "A nice coat of fluoride, though. Now that's different.", "Mine's beige. It's a personal choice."], cure: "He has been gently descaled." },
+    brine: { name: "Brine Wilkins", lines: ["Welcome to Brine Station.", "Next departure: never.", "The sink's free. The sadness is extra."], cure: "A train came! It was a bubble." },
+    sparky: { name: "Sparky Root", lines: ["DON'T TOUCH THE- ow.", "Sorry. Everything's a live wire round here.", "Have you tried turning the Nerve off and on?"], cure: "He's calmed down to a tingle." },
+    tilly: { name: "Tilly Tonsil", lines: ["Beam doors want light. A mirror's just rude light.", "Stand in the beam, right under the eye.", "Up it goes!"], cure: "She's taking cuttings." },
+    adna: { name: "Adna Noid", lines: ["Nobody knows what I do.", "Nobody's ever checked.", "Please don't check."], cure: "You checked. She was right." },
+    sal: { name: "Sal Soft-Palate", lines: ["Those wires across the chasm? Magnet Braces hold them.", "The Twins took my braces.", "One of them said I wouldn't need them. The other agreed."], cure: "He smiles now, with hardware." },
+    hal: { name: "Hal Itosis", lines: ["Hello! Oh, you're stepping back.", "Everybody does.", "Lovely view down there, though. I'm told. From a distance."], cure: "Wintergreen. A triumph." },
+    echo: { name: "Echo", lines: ["Echo!", "...echo.", "It gets lonely. Lonely."], cure: "...cured. Cured." },
+    rennie: { name: "Rennie Raft", lines: ["Don't look down. It's lunch.", "It's every lunch.", "The updrafts will carry a cotton chute right up the pipe."], cure: "He's found a better antacid." },
+    gaster: { name: "Gaster the Sea Hermit", lines: ["I swallowed a compass once.", "Now I'm always pointing the wrong way.", "North is that way. Or it's Tuesday."], cure: "It's Tuesday." },
+    molar: { name: "The Old Molar", lines: ["You're inside me now. Sorry about the draught.", "The Ache sleeps at the root of the crown.", "Drill it, little doctor, and we can all sleep."], cure: "He'd like his hollow back." },
+};
+export const PATIENTS = Object.keys(NPC).filter((k) => k !== "fairy");
+
+export const BOSS_INFO = {
+    tartar: { flag: "b1", name: "Sir Tartar", sub: "Knight of the Crust" },
+    bear: { flag: "b2", name: "The Molar Bear", sub: "He bites what he likes", grant: "FLOSS" },
+    queen: { flag: "b3", name: "Queen Caramelita", sub: "Sticky Sovereign of Decay", grant: "DASH" },
+    bud: { flag: "b4", name: "Papilla Prime", sub: "He has tasted greatness", grant: "AIR" },
+    bog: { flag: "b5", name: "The Mother of Film", sub: "Everyone's Biofilm", grant: "COAT" },
+    nerve: { flag: "b6", name: "The Exposed Nerve", sub: "Do not touch", grant: "MIRROR" },
+    twins: { flag: "b7", name: "The Tonsil Twins", sub: "They never stop talking", grant: "BRACES" },
+    uvula: { flag: "b8", name: "Uvula the Bellringer", sub: "It's not a punchbag", grant: "CHUTE" },
+    reflux: { flag: "b9", name: "The Reflux", sub: "Lunch is coming back", grant: "BURR" },
+    ache: { flag: "b10", name: "The Ache", sub: "Hollow at the heart" },
+};
+
+export const TOOLS = {
+    DRILL: { name: "Dental Drill", how: "DRILL to attack and break cracked walls. Aim up or down.", icon: "toolDrill" },
+    FLOSS: { name: "Floss Grapple", how: "Hold TOOL near a hook to swing. Press JUMP to fling off.", icon: "toolFloss" },
+    DASH: { name: "Mouthwash Dash", how: "DASH cuts through foam walls and thin air.", icon: "toolDash" },
+    AIR: { name: "Air Syringe", how: "JUMP again in mid-air.", icon: "toolAir" },
+    COAT: { name: "Fluoride Coat", how: "Acid no longer hurts. Swim with JUMP.", icon: "toolCoat" },
+    MIRROR: { name: "Dental Mirror", how: "Step into a beam and it bounces upward. Hold TOOL to throw back the Ache's bolts.", icon: "toolMirror" },
+    BRACES: { name: "Magnet Braces", how: "Jump at a ceiling wire and you'll hang from it.", icon: "toolBraces" },
+    CHUTE: { name: "Cotton Chute", how: "Hold JUMP while falling to float. Updrafts lift you.", icon: "toolChute" },
+    BURR: { name: "Diamond Burr", how: "Your drill now cuts tartar doors. The Hollow Tooth is open.", icon: "toolBurr" },
+};

@@ -1,0 +1,13 @@
+M1: 4/4 wins, par 60s win 34s 3* me50 foe  | win 34s 3* me52 foe  | win 34s 3* me50 foe  | win 28s 3* me44 foe 
+M2: 4/4 wins, par 130s win 72s 3* me173 foe  | win 92s 3* me241 foe  | win 70s 3* me174 foe  | win 68s 3* me177 foe 
+M3: 4/4 wins, par 200s win 125s 3* me346 foe83  | win 124s 3* me332 foe76  | win 121s 3* me341 foe76  | win 125s 3* me309 foe83 
+M4: 4/4 wins, par 110s win 64s 3* me175 foe  | win 63s 3* me175 foe  | win 62s 3* me170 foe  | win 64s 3* me176 foe 
+M5: 4/4 wins, par 190s win 115s 3* me370 foe  | win 117s 3* me369 foe  | win 112s 3* me364 foe  | win 118s 3* me364 foe 
+M6: 3/4 wins, par 460s win 331s 3* me277 foe130  | lose(queen) 458s 0* me48 foe130 queens:0/1 cnt 0,0,0,0,0 stock 681,0,32,475 ch 101200 | win 245s 3* me285 foe130  | win 336s 3* me280 foe130 
+M7: 4/4 wins, par 280s win 176s 3* me279 foe114  | win 193s 3* me282 foe175  | win 182s 3* me322 foe147  | win 186s 3* me271 foe184 
+M8: 4/4 wins, par 330s win 231s 3* me247 foe160  | win 203s 3* me263 foe160  | win 195s 3* me260 foe160  | win 183s 3* me250 foe160 
+M9: 4/4 wins, par 310s win 300s 3* me510 foe144  | win 300s 3* me577 foe99  | win 300s 3* me499 foe83  | win 300s 3* me342 foe180 
+M10: 4/4 wins, par 340s win 216s 3* me523 foe155/240  | win 217s 3* me504 foe155/240  | win 222s 3* me532 foe170/240  | win 228s 3* me494 foe172/240 
+M11: 3/4 wins, par 280s win 191s 3* me64 foe142  | win 240s 3* me64 foe107  | win 271s 2* me64 foe171  | lose(food) 358s 0* me64 foe300 food:1634/1800 cnt 23,0,0,0,0 stock 1531,2,23,4 ch 201110
+M12: 2/4 wins, par 620s win 294s 3* me285 foe200  | lose(queen) 594s 0* me203 foe195 queens:0/1 cnt 8,0,1,0,0 stock 1,413,125,311 ch 212222 | timeout 1200s 0* me214 foe320 queens:0/1 cnt 29,20,5,0,0 stock 1,299,33,121 ch 212221 | win 284s 3* me313 foe198 
+every mission won at least once

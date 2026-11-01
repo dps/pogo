@@ -200,6 +200,31 @@ try {
         await ctx.close();
     }
 
+    // --- Haptics and the song clock -------------------------------------------------------------
+    {
+        const ctx = await browser.newContext({ ...PHONE, permissions: [] });
+        await ctx.addInitScript(() => { window.__pulses = []; navigator.vibrate = (p) => { window.__pulses.push(p); return true; }; });
+        const { page } = await open(ctx, "hopper");
+        await page.waitForFunction(() => __pogo.current?.entities.some((e) => e.buttonLabel));
+        const at = await page.evaluate(() => { const b = __pogo.current.entities.find((e) => e.buttonLabel), v = __pogo.view; const r = b.worldPos(); return { x: r.x * v.scale + v.x, y: r.y * v.scale + v.y }; });
+        await page.touchscreen.tap(at.x, at.y);
+        await page.waitForTimeout(300);
+        const pulses = await page.evaluate(() => window.__pulses);
+        check("haptics: tapping a button vibrates with no game code", pulses.some((p) => JSON.stringify(p) === "[12]"), JSON.stringify(pulses.slice(0, 5)));
+        const clock = await page.evaluate(async () => {
+            const a = __pogo.audio;
+            a.unlock();
+            __pogo.music({ bpm: 120, steps: 2, tracks: [{ wave: "noise", notes: "C4 - C4 -", volume: 0.01 }, { slide: 0.5, decay: 0.1, notes: "C3 - - -", volume: 0.01 }] });
+            await new Promise((r) => setTimeout(r, 900));
+            const c = a.song;
+            a.playAt("coin", c.time + 0.1);
+            a.stopMusic();
+            return { time: c.time, beat: c.beat, state: a.ctx?.state };
+        });
+        check("song clock: follows the audio hardware", clock.state !== "running" || (clock.time > 0.5 && clock.time < 1.1 && Math.abs(clock.beat - clock.time * 2) < 1e-6), JSON.stringify(clock));
+        await ctx.close();
+    }
+
     // --- Locked-down embeds --------------------------------------------------------------------
     // A sandboxed frame on an opaque origin with gamepads, storage and pointer lock blocked, like a hosted preview.
     for (const name of ["flock", "shooter"]) {

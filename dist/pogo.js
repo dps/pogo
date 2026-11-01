@@ -521,6 +521,13 @@ var PALETTE = {
   h: "#92400e",
   u: "#7c4a21"
 };
+var inks = /* @__PURE__ */ new Map();
+var ink = (c) => {
+  if (typeof c !== "string") return color(c);
+  let v = inks.get(c);
+  if (!v) inks.set(c, v = color(c));
+  return v;
+};
 var Pixmap = class {
   constructor(width, height, atlas, stride, frameOffset) {
     this.width = width;
@@ -540,7 +547,7 @@ var Pixmap = class {
     x = Math.floor(x);
     y = Math.floor(y);
     if (x < 0 || y < 0 || x >= this.width || y >= this.height) return this;
-    const col = color(c), a = col.a * coverage, o = this.index(x, y), d = this.data, da = d[o + 3] / 255, out = a + da * (1 - a);
+    const col = ink(c), a = col.a * coverage, o = this.index(x, y), d = this.data, da = d[o + 3] / 255, out = a + da * (1 - a);
     if (out <= 0) return this;
     d[o] = (col.r * 255 * a + d[o] * da * (1 - a)) / out;
     d[o + 1] = (col.g * 255 * a + d[o + 1] * da * (1 - a)) / out;
@@ -559,7 +566,7 @@ var Pixmap = class {
   }
   /** Vertical gradient, top to bottom. */
   gradient(x, y, w, h, top, bottom) {
-    const a = color(top);
+    const a = ink(top);
     for (let j = 0; j < h; j++) {
       const c = a.lerp(bottom, h > 1 ? j / (h - 1) : 0);
       for (let i = 0; i < w; i++) this.set(x + i, y + j, c);
@@ -568,7 +575,7 @@ var Pixmap = class {
   }
   /** Filled, anti-aliased ellipse. An optional bottom color gives it a gradient. */
   ellipse(cx, cy, rx, ry, c, bottom) {
-    const col = color(c);
+    const col = ink(c);
     for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
       const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry, d = Math.hypot(dx, dy);
       const cover = Math.max(0, Math.min(1, (1 - d) * Math.min(rx, ry) + 0.5));
@@ -617,7 +624,7 @@ var Pixmap = class {
   }
   /** A 1px outline around everything painted so far. The biggest single upgrade to sprite readability. */
   outline(c = "#1f2430") {
-    const col = color(c), before = this.data.slice(), alpha = (x, y) => x < 0 || y < 0 || x >= this.width || y >= this.height ? 0 : before[this.index(x, y) + 3] / 255;
+    const col = ink(c), before = this.data.slice(), alpha = (x, y) => x < 0 || y < 0 || x >= this.width || y >= this.height ? 0 : before[this.index(x, y) + 3] / 255;
     for (let y = 0; y < this.height; y++) for (let x = 0; x < this.width; x++) {
       const a0 = alpha(x, y), cover = Math.max(alpha(x - 1, y), alpha(x + 1, y), alpha(x, y - 1), alpha(x, y + 1)) * col.a;
       if (a0 >= 1 || cover <= 0) continue;
@@ -773,10 +780,70 @@ var Assets = class {
     this.geoms.set(name, customGeometry(data));
     return this;
   }
+  /** Release a mesh or sprite's GPU memory when it's no longer used, such as a level's track. It can be defined again afterwards. */
+  free(name) {
+    const g = this.geoms.get(name), a = this.sprites.get(name);
+    if (g) {
+      this.game.renderer.freeGeometry(g);
+      this.geoms.delete(name);
+    }
+    if (a) {
+      this.game.renderer.freeTexture(a);
+      this.sprites.delete(name);
+    }
+  }
+  /** Upload a sprite again after changing its data, reusing the texture. */
+  refresh(name) {
+    this.game.renderer.refresh(this.sprite(name));
+  }
+  /** Read a painted sprite as a grid of frames, for sheets with several rows. */
+  grid(name, cols, rows2) {
+    const a = this.sprite(name);
+    a.cols = cols;
+    a.rows = rows2;
+    a.frameW = a.width / cols;
+    a.frameH = a.height / rows2;
+    return this;
+  }
+  /** Hold game.start() until this finishes, for art painted over several frames. */
+  wait(work) {
+    this.pending.push(work);
+    return this;
+  }
   sprite(name) {
     const a = this.sprites.get(name);
     if (!a) throw new PogoError("UNKNOWN_SPRITE", `No sprite named "${name}".`, `${suggest(name, this.sprites.keys())} Define sprites with game.assets.pixels() or .image() before game.start().`);
     return a;
+  }
+  /**
+   * A turned shape from a profile of [radius, height] points, bottom to top: chess pieces, cups, wheels, bottles.
+   * Repeat a point to get a hard edge there.
+   */
+  lathe(name, profile, o = {}) {
+    const n = o.segments ?? 24, rings = profile.length, c = color(o.color ?? "#ffffff");
+    const heights = profile.map((p) => p[1]), mid = (Math.min(...heights) + Math.max(...heights)) / 2;
+    const positions = [], normals = [], uvs = [], colors = [], indices = [];
+    const dir = (i) => {
+      const p = profile[i], q = profile[i + 1], dx = q ? q[0] - p[0] : 0, dy = q ? q[1] - p[1] : 0, len = Math.hypot(dx, dy);
+      return len ? [dx / len, dy / len] : null;
+    };
+    for (let i = 0; i < rings; i++) {
+      const before = i > 0 ? dir(i - 1) : null, after = dir(i);
+      const t = before && after ? [before[0] + after[0], before[1] + after[1]] : before ?? after ?? [0, 1];
+      const len = Math.hypot(t[0], t[1]) || 1, nr = t[1] / len, ny = -t[0] / len;
+      for (let j = 0; j <= n; j++) {
+        const a = j / n * Math.PI * 2, x = Math.cos(a), z = Math.sin(a);
+        positions.push(x * profile[i][0], profile[i][1] - mid, z * profile[i][0]);
+        normals.push(x * nr, ny, z * nr);
+        uvs.push(j / n, i / (rings - 1));
+        colors.push(c.r, c.g, c.b);
+      }
+    }
+    for (let i = 0; i < rings - 1; i++) for (let j = 0; j < n; j++) {
+      const p = i * (n + 1) + j, q = p + n + 1;
+      indices.push(p, q, q + 1, p, q + 1, p + 1);
+    }
+    return this.mesh(name, { positions, normals, uvs, colors, indices });
   }
   geometry(name) {
     const g = this.geoms.get(name);
@@ -801,6 +868,7 @@ var SFX = {
   lose: [{ wave: "sawtooth", freq: 330, to: 300, decay: 0.2, volume: 0.25 }, { wave: "sawtooth", freq: 262, to: 110, decay: 0.5, volume: 0.25, at: 0.2 }],
   win: [{ wave: "square", freq: 523, decay: 0.12, volume: 0.2 }, { wave: "square", freq: 659, decay: 0.12, volume: 0.2, at: 0.12 }, { wave: "square", freq: 784, decay: 0.12, volume: 0.2, at: 0.24 }, { wave: "square", freq: 1047, decay: 0.4, volume: 0.2, at: 0.36 }]
 };
+var SFX_HAPTICS = { click: "tick", jump: "tick", land: "tick", coin: "light", shoot: "tick", hit: "medium", explode: "heavy", powerup: "success", lose: "error", win: "success" };
 var NOTE = /^([A-G])([#b]?)(\d)$/;
 var SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 function noteFreq(n) {
@@ -822,6 +890,8 @@ var Audio = class {
   noise = null;
   buffers = /* @__PURE__ */ new Map();
   music = null;
+  /** Added to song.time, for a player's calibration of their speakers. */
+  offset = 0;
   unlocked = false;
   blocked = false;
   ensure() {
@@ -868,13 +938,23 @@ var Audio = class {
     this.buffers.set(name, ctx ? await ctx.decodeAudioData(data) : null);
   }
   /** Play a preset, a loaded sound, or a custom tone. */
-  play(sound) {
+  play(sound, o = {}) {
     const name = typeof sound === "string" ? sound : "custom";
     if (typeof sound === "string" && !(sound in SFX) && !this.buffers.has(sound)) {
       throw new PogoError("UNKNOWN_SOUND", `No sound named "${sound}".`, suggest(sound, [...Object.keys(SFX), ...this.buffers.keys()]));
     }
     this.log.push(name);
     if (this.log.length > 32) this.log.shift();
+    if (o.haptic !== void 0) this.game.haptics.play(o.haptic);
+    else if (typeof sound === "string") this.game.haptics._auto(SFX_HAPTICS[sound]);
+    this.start(sound, 0);
+  }
+  /** Play a sound at an exact moment in the current song. Call it a little ahead of time; this is how rhythm games stay tight. */
+  playAt(sound, songTime) {
+    const m = this.music, ctx = this.ctx;
+    if (m && ctx) this.start(sound, Math.max(0, m.start + songTime - ctx.currentTime));
+  }
+  start(sound, delay) {
     const ctx = this.ctx;
     if (!ctx || !this.master || this.muted || ctx.state !== "running") return;
     this.master.gain.value = this.volume;
@@ -882,11 +962,70 @@ var Audio = class {
       const src = ctx.createBufferSource();
       src.buffer = this.buffers.get(sound);
       src.connect(this.master);
-      src.start();
+      src.start(ctx.currentTime + delay);
       return;
     }
     const def = typeof sound === "string" ? SFX[sound] : sound;
-    for (const t of Array.isArray(def) ? def : [def]) this.tone(t, ctx.currentTime + (t.at ?? 0), this.master);
+    for (const t of Array.isArray(def) ? def : [def]) this.tone(t, ctx.currentTime + delay + (t.at ?? 0), this.master);
+  }
+  /**
+   * A sound that plays until stopped, for engines, wind and drones. Change it every step with set(): it glides, so it never clicks.
+   * Without audio this returns a handle that does nothing, so games never need to check.
+   */
+  voice(o = {}) {
+    const ctx = this.ensure();
+    if (!ctx || !this.master || !this.noise) return { set() {
+    }, stop() {
+    } };
+    const gain = ctx.createGain(), noisy = o.wave === "noise", glide = 0.03;
+    gain.gain.value = this.muted ? 0 : o.volume ?? 0.2;
+    gain.connect(this.master);
+    const filter = noisy ? ctx.createBiquadFilter() : null, osc = noisy ? null : ctx.createOscillator(), src = noisy ? ctx.createBufferSource() : null;
+    const pitch = filter?.frequency ?? osc.frequency;
+    pitch.value = o.freq ?? 440;
+    if (src && filter) {
+      src.buffer = this.noise;
+      src.loop = true;
+      filter.type = "lowpass";
+      src.connect(filter).connect(gain);
+      src.start();
+    }
+    if (osc) {
+      osc.type = o.wave ?? "sawtooth";
+      osc.connect(gain);
+      osc.start();
+    }
+    let volume = o.volume ?? 0.2, stopped = false;
+    return {
+      set: (v) => {
+        if (stopped) return;
+        volume = v.volume ?? volume;
+        if (v.freq !== void 0) pitch.setTargetAtTime(Math.max(20, v.freq), ctx.currentTime, glide);
+        gain.gain.setTargetAtTime(this.muted ? 0 : volume, ctx.currentTime, glide);
+      },
+      stop: () => {
+        if (stopped) return;
+        stopped = true;
+        gain.gain.setTargetAtTime(0, ctx.currentTime, glide);
+        (osc ?? src).stop(ctx.currentTime + 0.2);
+      }
+    };
+  }
+  /** Seconds from scheduling a sound to the player hearing it, plus their calibration. */
+  latency() {
+    const c = this.ctx;
+    return (c?.outputLatency || c?.baseLatency || 0) + this.offset;
+  }
+  /** Where the current song is. Falls back to the step clock when there's no audio, so bots and silent embeds still get a steady beat. */
+  get song() {
+    const m = this.music;
+    if (!m) return { playing: false, stalled: false, time: 0, beat: 0, step: 0, bpm: 0, length: 0 };
+    const ctx = this.ctx;
+    if (ctx && m.timer !== null) {
+      if (ctx.state === "running") m.last = ctx.currentTime - m.start - this.latency();
+    } else m.last = (this.game.stepCount - m.startStep) * this.game.dt - this.offset;
+    const step = m.last / m.stepDur;
+    return { playing: !(m.once && m.last >= m.length), stalled: !!ctx && m.timer !== null && ctx.state !== "running", time: m.last, beat: step / m.steps, step, bpm: m.bpm, length: m.length };
   }
   tone(t, start, out) {
     const ctx = this.ctx, gain = ctx.createGain(), attack = t.attack ?? 5e-3, decay = t.decay ?? 0.15, peak = t.volume ?? 0.3, end = start + attack + decay;
@@ -920,16 +1059,22 @@ var Audio = class {
     this.stopMusic();
     const parsed = song.tracks.map((t) => ({ ...t, seq: t.notes.trim().split(/\s+/).map((n) => n === "-" ? 0 : noteFreq(n)) }));
     this.log.push("music");
+    const stepDur = 60 / (song.bpm ?? 120) / (song.steps ?? 2), length = Math.max(...parsed.map((t) => t.seq.length));
+    const clock = { timer: null, gain: null, start: 0, stepDur, steps: song.steps ?? 2, bpm: song.bpm ?? 120, length: length * stepDur, once: song.loop === false, startStep: this.game.stepCount, last: 0 };
     const ctx = this.ensure();
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.master) {
+      this.music = clock;
+      return;
+    }
     const gain = ctx.createGain();
     gain.gain.value = 0.5;
     gain.connect(this.master);
-    const stepDur = 60 / (song.bpm ?? 120) / (song.steps ?? 2), length = Math.max(...parsed.map((t) => t.seq.length));
     let step = 0, next = ctx.currentTime + 0.05;
     const timer = setInterval(() => {
-      if (ctx.state !== "running" || this.muted) {
+      const m = this.music;
+      if (ctx.state !== "running") {
         next = ctx.currentTime + 0.05;
+        if (m) m.start = next - step * stepDur;
         return;
       }
       while (next < ctx.currentTime + 0.2) {
@@ -937,20 +1082,20 @@ var Audio = class {
           this.stopMusic();
           return;
         }
-        for (const t of parsed) {
+        if (!this.muted) for (const t of parsed) {
           const f = t.seq[step % t.seq.length];
-          if (f) this.tone({ wave: t.wave ?? "triangle", freq: f, decay: stepDur * 1.4, volume: t.volume ?? 0.2 }, next, gain);
+          if (f) this.tone({ wave: t.wave ?? "triangle", freq: f, to: t.slide ? f * t.slide : void 0, attack: t.attack, decay: t.decay ?? stepDur * 1.4, volume: t.volume ?? 0.2 }, next, gain);
         }
         step++;
         next += stepDur;
       }
     }, 60);
-    this.music = { timer, gain };
+    this.music = { ...clock, timer, gain, start: next };
   }
   stopMusic() {
     if (!this.music) return;
-    clearInterval(this.music.timer);
-    this.music.gain.disconnect();
+    if (this.music.timer !== null) clearInterval(this.music.timer);
+    this.music.gain?.disconnect();
     this.music = null;
   }
 };
@@ -979,6 +1124,7 @@ function snapshot(g) {
     paused: s?.paused ?? false,
     data: g.data,
     sounds: g.audio.log.slice(-8),
+    haptics: g.haptics.log.slice(-8),
     errors: g.errors.map((e) => e.message),
     entityCount: s?.entities.length ?? 0,
     entities: s?.entities.filter((e) => e.alive).slice(0, 200).map(describe) ?? []
@@ -1081,6 +1227,108 @@ function isFaded(e) {
   for (let p = e; p; p = p.parent) if (p.opacity <= 0.01 || p.hidden) return true;
   return false;
 }
+
+// src/haptics.ts
+var HAPTICS = {
+  tick: [6],
+  light: [12],
+  medium: [24],
+  heavy: [45],
+  success: [14, 50, 24],
+  warn: [24, 60, 24],
+  error: [40, 40, 40, 40, 60]
+};
+var GAP_STEPS = 3;
+var AUTO_GAP_STEPS = 6;
+var strength = (p) => p.reduce((sum, ms, i) => i % 2 ? sum : sum + ms, 0);
+var Haptics = class {
+  constructor(game, option = true) {
+    this.game = game;
+    if (option === false) this.on = false;
+    else if (typeof option === "object") this.auto = option.auto ?? true;
+  }
+  /** Recent pulses, newest last; visible in game.state(). */
+  log = [];
+  /** Automatic pulses from buttons, controls, presets and shake. Explicit play() calls ignore this. */
+  auto = true;
+  on = true;
+  lastStep = -1e3;
+  lastStrength = 0;
+  iosLabel = null;
+  /** Master switch, for a settings toggle. game.load/save keeps the player's choice if you want it remembered. */
+  get enabled() {
+    return this.on;
+  }
+  set enabled(v) {
+    this.on = v;
+  }
+  /** Pulse now: a preset name, a length in ms, or a pattern. Close calls merge, and the stronger one wins. */
+  play(kind = "light") {
+    this.pulse(kind, GAP_STEPS);
+  }
+  /** @internal A pulse the framework chose, which the game can turn off with haptics.auto. */
+  _auto(kind) {
+    if (this.auto && kind !== void 0) this.pulse(kind, AUTO_GAP_STEPS);
+  }
+  pulse(kind, gap) {
+    if (!this.on) return;
+    if (typeof kind === "string" && !(kind in HAPTICS)) throw new PogoError("UNKNOWN_HAPTIC", `No haptic named "${kind}".`, suggest(kind, Object.keys(HAPTICS)));
+    const pattern = typeof kind === "string" ? HAPTICS[kind] : typeof kind === "number" ? [kind] : kind, power = strength(pattern), step = this.game.stepCount;
+    if (step - this.lastStep < gap && power <= this.lastStrength) return;
+    this.lastStep = step;
+    this.lastStrength = power;
+    this.log.push(typeof kind === "string" ? kind : `${power}ms`);
+    if (this.log.length > 32) this.log.shift();
+    if (!this.game.headless) this.device(pattern, power);
+  }
+  device(pattern, power) {
+    this.rumble(power);
+    if (typeof navigator === "undefined") return;
+    if (navigator.userActivation?.hasBeenActive === false) return;
+    try {
+      if (navigator.vibrate) navigator.vibrate(pattern);
+      else this.iosPulse(pattern);
+    } catch {
+    }
+  }
+  rumble(power) {
+    const actuator = this.game.input.activePad?.vibrationActuator;
+    if (!actuator?.playEffect) return;
+    const magnitude = Math.min(1, 0.2 + power / 60);
+    try {
+      actuator.playEffect("dual-rumble", { duration: Math.max(20, power), strongMagnitude: magnitude, weakMagnitude: magnitude })?.catch?.(() => {
+      });
+    } catch {
+    }
+  }
+  /** iOS has no vibrate API, but Safari 18 and later tick when a switch toggles. It is one strength, and needs a recent gesture. */
+  iosPulse(pattern) {
+    if (!/iP(hone|ad|od)|Macintosh/.test(navigator.userAgent) || navigator.maxTouchPoints < 2) return;
+    if (!this.iosLabel) {
+      const label = this.iosLabel = document.createElement("label"), box = document.createElement("input");
+      box.type = "checkbox";
+      box.setAttribute("switch", "");
+      box.tabIndex = -1;
+      label.setAttribute("aria-hidden", "true");
+      label.style.cssText = "position:fixed;left:-99px;top:0;width:1px;height:1px;opacity:0;pointer-events:none";
+      label.appendChild(box);
+      document.body.appendChild(label);
+    }
+    const click = () => {
+      const focus = document.activeElement;
+      this.iosLabel.click();
+      focus?.focus?.({ preventScroll: true });
+    };
+    let at = 0;
+    pattern.forEach((ms, i) => {
+      if (i % 2 === 0) {
+        if (at) setTimeout(click, at);
+        else click();
+      }
+      at += ms;
+    });
+  }
+};
 
 // src/input.ts
 var DEFAULT_ACTIONS = {
@@ -1199,13 +1447,22 @@ var Input = class {
   /** All active touches, in view units. */
   get touches() {
     this.used.add("pointer");
-    return [...this.pointers.values()].filter((p) => !p.captured).map((p) => ({ id: p.id, x: p.x, y: p.y }));
+    return [...this.pointers.values()].filter((p) => !p.captured).map((p) => ({ id: p.id, x: p.x, y: p.y, pressed: p.steps === 1 }));
   }
   /** @internal Tap dispatch reads raw edges, because it decides what gets consumed. */
   _raw() {
     return { x: this.px, y: this.py, pressed: this.pPressed, released: this.pReleased, tapped: this.pTapped };
   }
   /** @internal Read an action without counting it as a gameplay dependency in the audit. */
+  /** @internal Hit-stop must not eat what the player pressed during it, so these replay on the first step after. */
+  _holdPresses() {
+    for (const [action, st] of this.states) if (st.pressed) this.held.add(action);
+  }
+  /** @internal */
+  _releasePresses() {
+    for (const action of this.held) this.states.get(action).pressed = true;
+    this.held.clear();
+  }
   _quiet(action) {
     return this.states.get(action)?.pressed ?? false;
   }
@@ -1276,11 +1533,12 @@ var Input = class {
     this.pConsumed = false;
     this._swipe = null;
     const ox = this.px, oy = this.py;
+    this.extraPresses.length = 0;
     const queue = this.queue;
     this.queue = [];
     for (const ev of queue) this.handlePointer(ev);
-    this.pDx = this.px - ox;
-    this.pDy = this.py - oy;
+    this.pDx = this.pPressed ? 0 : this.px - ox;
+    this.pDy = this.pPressed ? 0 : this.py - oy;
     this.look.set(this.pendingLook.x + this.padLook.x * 8, this.pendingLook.y + this.padLook.y * 8, 0);
     this.pendingLook.set(0, 0, 0);
     this.wheel = this.pendingWheel;
@@ -1317,7 +1575,7 @@ var Input = class {
         this.pPressed = true;
         this.px = ev.x;
         this.py = ev.y;
-      }
+      } else if (!p2.captured) this.extraPresses.push(p2);
       return;
     }
     const p = this.pointers.get(ev.id);
@@ -1354,7 +1612,12 @@ var Input = class {
       else if (dist >= 32 && p.steps < 45) this._swipe = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? "right" : "left" : dy > 0 ? "down" : "up";
     }
   }
+  held = /* @__PURE__ */ new Set();
   padsBlocked = false;
+  /** @internal Fingers that landed this step while another was already down. */
+  extraPresses = [];
+  /** The gamepad in use, if any. */
+  activePad = null;
   pollGamepads() {
     this.padStick.set(0, 0, 0);
     this.padLook.set(0, 0, 0);
@@ -1367,8 +1630,10 @@ var Input = class {
       return;
     }
     const dz = (v) => Math.abs(v) < 0.18 ? 0 : v;
+    this.activePad = null;
     for (const pad of pads) {
       if (!pad) continue;
+      this.activePad = pad;
       for (const [i, code] of PAD_BUTTONS) {
         if (pad.buttons[i]?.pressed) this.codeDown(code);
         else this.codeUp(code);
@@ -1425,10 +1690,20 @@ var NullRenderer = class {
   }
   tris() {
   }
+  blend() {
+  }
+  clip() {
+  }
   endFrame() {
   }
   texture() {
     return null;
+  }
+  refresh() {
+  }
+  freeGeometry() {
+  }
+  freeTexture() {
   }
   measureText(str, style) {
     return layoutText(str, style, estimateLine(style));
@@ -1446,12 +1721,14 @@ var NullRenderer = class {
 var DEFAULT_FONT = "system-ui, -apple-system, Roboto, sans-serif";
 var WHITE = new Color();
 var scratch = mat4();
+var QUAD = new Float32Array(6);
 var Draw = class {
   constructor(game) {
     this.game = game;
   }
   m = new Float32Array([1, 0, 0, 1, 0, 0]);
   alpha = 1;
+  stack = [];
   colors = /* @__PURE__ */ new Map();
   get r() {
     return this.game.renderer;
@@ -1475,11 +1752,49 @@ var Draw = class {
     m[4] = w[12];
     m[5] = w[13];
     this.alpha = e._opacity;
+    this.stack.length = 0;
   }
   /** @internal Back to an untransformed, fully opaque state. */
   reset() {
     this.m.set([1, 0, 0, 1, 0, 0]);
     this.alpha = 1;
+    this.stack.length = 0;
+  }
+  /** Save the transform. Pair with pop(). */
+  push() {
+    this.stack.push(this.m.slice());
+  }
+  pop() {
+    const m = this.stack.pop();
+    if (m) this.m.set(m);
+  }
+  translate(x, y) {
+    const m = this.m;
+    m[4] += m[0] * x + m[2] * y;
+    m[5] += m[1] * x + m[3] * y;
+  }
+  rotate(angle) {
+    const m = this.m, c = Math.cos(angle), s = Math.sin(angle), a = m[0], b = m[1], cc = m[2], dd = m[3];
+    m[0] = a * c + cc * s;
+    m[1] = b * c + dd * s;
+    m[2] = cc * c - a * s;
+    m[3] = dd * c - b * s;
+  }
+  scale(x, y = x) {
+    const m = this.m;
+    m[0] *= x;
+    m[1] *= x;
+    m[2] *= y;
+    m[3] *= y;
+  }
+  /** Everything drawn inside fn adds light instead of covering what's behind it: glows, sparks, lasers. */
+  additive(fn) {
+    this.r.blend(true);
+    try {
+      fn();
+    } finally {
+      this.r.blend(false);
+    }
   }
   rect(w, h, o = {}) {
     const [r, g, b, a] = this.paint(o.color, o), x = o.x ?? 0, y = o.y ?? 0, hw = w / 2, hh = h / 2, pad = 1.5;
@@ -1502,19 +1817,62 @@ var Draw = class {
     this.r.tris(this.m, out, r, g, b, a);
   }
   sprite(name, o = {}) {
+    if (o.rot) {
+      this.push();
+      this.translate(o.x ?? 0, o.y ?? 0);
+      this.rotate(o.rot);
+      this.sprite(name, { ...o, x: 0, y: 0, rot: 0 });
+      this.pop();
+      return;
+    }
     const asset = this.game.assets.sprite(name);
     const frame = (o.frame ?? 0) % (asset.cols * asset.rows), col = frame % asset.cols, row = Math.floor(frame / asset.cols);
-    const w = o.width ?? asset.frameW, h = o.height ?? asset.frameH, x = o.x ?? 0, y = o.y ?? 0;
-    const u0 = col / asset.cols, v0 = row / asset.rows, u1 = (col + 1) / asset.cols, v1 = (row + 1) / asset.rows;
+    const crop = o.crop, w = o.width ?? crop?.[2] ?? asset.frameW, h = o.height ?? crop?.[3] ?? asset.frameH, x = o.x ?? 0, y = o.y ?? 0;
+    const u0 = crop ? crop[0] / asset.width : col / asset.cols, v0 = crop ? crop[1] / asset.height : row / asset.rows;
+    const u1 = crop ? (crop[0] + crop[2]) / asset.width : (col + 1) / asset.cols, v1 = crop ? (crop[1] + crop[3]) / asset.height : (row + 1) / asset.rows;
     const [r, g, b, a] = this.paint(o.color, o);
     const flip = !!o.flipX;
     this.r.quad(this.m, x - w / 2, y - h / 2, x + w / 2, y + h / 2, flip ? u1 : u0, v0, flip ? u0 : u1, v1, r, g, b, a, this.r.texture(asset), MODE_TEXTURE, 0, 0, 0, 0);
   }
   text(str, o = {}) {
+    if (o.rot) {
+      this.push();
+      this.translate(o.x ?? 0, o.y ?? 0);
+      this.rotate(o.rot);
+      this.text(str, { ...o, x: 0, y: 0, rot: 0 });
+      this.pop();
+      return;
+    }
     const style = { size: o.size ?? 20, font: o.font ?? DEFAULT_FONT, bold: o.bold ?? false, align: o.align ?? "center", maxWidth: o.maxWidth ?? 0, lineHeight: o.lineHeight ?? 1.25 };
     const t = this.r.text(String(str), style), x = o.x ?? 0, y = o.y ?? 0;
     const [r, g, b, a] = this.paint(o.color, o);
     this.r.quad(this.m, x - t.width / 2, y - t.height / 2, x + t.width / 2, y + t.height / 2, 0, 0, 1, 1, r, g, b, a, t.tex, MODE_TEXTURE, 0, 0, 0, 0);
+  }
+  /**
+   * The fast path for swarms. Returns put(x, y, w, h, rot, frame, r, g, b, a), which skips option parsing and color lookup.
+   * Colors are 0 to 1. Keep one sheet per batch, because each texture change is a draw call.
+   */
+  quads(name) {
+    const asset = this.game.assets.sprite(name), r = this.r, tex = r.texture(asset), cols = asset.cols, rows2 = asset.rows, count = cols * rows2, m = this.m, q = QUAD, alpha = this.alpha;
+    return (x, y, w, h, rot2 = 0, frame = 0, cr = 1, cg = 1, cb = 1, ca = 1) => {
+      const f = frame % count, c = f % cols, row = (f - c) / cols, cs = rot2 ? Math.cos(rot2) : 1, sn = rot2 ? Math.sin(rot2) : 0;
+      q[0] = m[0] * cs + m[2] * sn;
+      q[1] = m[1] * cs + m[3] * sn;
+      q[2] = m[2] * cs - m[0] * sn;
+      q[3] = m[3] * cs - m[1] * sn;
+      q[4] = m[0] * x + m[2] * y + m[4];
+      q[5] = m[1] * x + m[3] * y + m[5];
+      r.quad(q, -w / 2, -h / 2, w / 2, h / 2, c / cols, row / rows2, (c + 1) / cols, (row + 1) / rows2, cr, cg, cb, ca * alpha, tex, MODE_TEXTURE, 0, 0, 0, 0);
+    };
+  }
+  /** Clip everything drawn inside fn to a rectangle in view units, for scrolling lists and panels. */
+  clip(x, y, w, h, fn) {
+    this.r.clip(x, y, w, h);
+    try {
+      fn();
+    } finally {
+      this.r.clip(null);
+    }
   }
   /** @internal Queue a mesh for the 3D pass. */
   mesh(name, world, o) {
@@ -1522,7 +1880,7 @@ var Draw = class {
     const fit = (s, w) => w > 1e-6 ? s / w : 1;
     const matrix = new Float32Array(16);
     mat4Mul(matrix, world, mat4Compose(scratch, ZERO, ZERO, new Vec(fit(o.size.x, n.x), fit(o.size.y, n.y), fit(o.size.z, n.z))));
-    this.r.mesh(item(geom, matrix, o.color, this.alpha, o.texture ? this.game.assets.sprite(o.texture) : null, o.unlit, o.castShadow ?? true));
+    this.r.mesh(item(geom, matrix, o.color, this.alpha, o.texture ? this.game.assets.sprite(o.texture) : null, o.unlit, o.castShadow ?? true, o.shine ?? 0));
   }
   /** @internal */
   billboard(name, e, o) {
@@ -1542,8 +1900,8 @@ var Draw = class {
   }
 };
 var ZERO = new Vec();
-function item(geom, matrix, c, alpha, texture, unlit = false, castShadow = true) {
-  return { geom, matrix, r: c.r, g: c.g, b: c.b, a: c.a * alpha, texture, u0: 0, v0: 0, u1: 1, v1: 1, unlit, castShadow, cutout: false };
+function item(geom, matrix, c, alpha, texture, unlit = false, castShadow = true, shine = 0) {
+  return { geom, matrix, r: c.r, g: c.g, b: c.b, a: c.a * alpha, texture, u0: 0, v0: 0, u1: 1, v1: 1, unlit, castShadow, cutout: false, shine };
 }
 
 // src/render/gl.ts
@@ -1593,12 +1951,18 @@ var FS_3D = `#version 300 es
 precision highp float; precision highp sampler2DShadow;
 in vec3 v_nor; in vec3 v_w; in vec2 v_uv; in vec4 v_col; in vec3 v_s;
 uniform sampler2D u_tex; uniform sampler2DShadow u_shadow;
-uniform float u_useTex, u_unlit, u_shadows, u_texel, u_cutout;
+uniform float u_useTex, u_unlit, u_shadows, u_texel, u_cutout, u_shine, u_soft;
 uniform vec3 u_sun, u_sunCol, u_sky, u_ground, u_fogCol, u_eye; uniform vec2 u_fog;
 out vec4 o;
 float shadow(){
   if (u_shadows < .5 || v_s.x<0.||v_s.x>1.||v_s.y<0.||v_s.y>1.||v_s.z>1.) return 1.;
   float t=u_texel, z=v_s.z-.0015;
+  if (u_soft > .5) {
+    const vec2 p[8] = vec2[8](vec2(-.94,-.4),vec2(.95,-.77),vec2(-.09,-.93),vec2(.34,.29),vec2(-.92,.46),vec2(.44,.9),vec2(-.38,.92),vec2(.54,-.3));
+    float a = fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)*6.2832, c=cos(a), s=sin(a), sum=0.;
+    for (int i=0;i<8;i++) sum += texture(u_shadow,vec3(v_s.xy+mat2(c,s,-s,c)*p[i]*t*3.,z));
+    return sum*.125;
+  }
   return (texture(u_shadow,vec3(v_s.xy+vec2(-t,-t),z))+texture(u_shadow,vec3(v_s.xy+vec2(t,-t),z))
          +texture(u_shadow,vec3(v_s.xy+vec2(-t,t),z))+texture(u_shadow,vec3(v_s.xy+vec2(t,t),z)))*.25;
 }
@@ -1608,8 +1972,14 @@ void main(){
   vec3 c = base.rgb;
   if (u_unlit < .5) {
     vec3 n = normalize(v_nor);
-    float diff = max(dot(n,-u_sun),0.);
-    c *= mix(u_ground,u_sky,n.y*.5+.5) + u_sunCol*diff*shadow();
+    float diff = max(dot(n,-u_sun),0.), lit = shadow();
+    c *= mix(u_ground,u_sky,n.y*.5+.5) + u_sunCol*diff*lit;
+    if (u_shine > 0.) {
+      vec3 v = normalize(u_eye-v_w), r = reflect(-v,n);
+      float spec = pow(max(dot(n,normalize(v-u_sun)),0.),mix(14.,180.,u_shine))*step(0.,diff);
+      float rim = pow(1.-max(dot(n,v),0.),4.);
+      c += u_sunCol*spec*lit*u_shine*1.4 + mix(u_ground,u_sky,r.y*.5+.5)*rim*u_shine*.7;
+    }
     if (u_fog.y > 0.) c = mix(c,u_fogCol,smoothstep(u_fog.x,u_fog.y,distance(v_w,u_eye)));
   }
   o = vec4(c*base.a, base.a);
@@ -1625,8 +1995,8 @@ var MAX_QUADS = 4096;
 var FLOATS_2D = 10;
 var VERTS_2D = MAX_QUADS * 6;
 var FLOATS_INSTANCE = 24;
-var SHADOW_SIZE = 1024;
-var TEXT_CACHE = 256;
+var SHADOW_SIZE = 2048;
+var TEXT_CACHE = 1024;
 var GLRenderer = class {
   constructor(canvas, opts) {
     this.canvas = canvas;
@@ -1682,7 +2052,7 @@ var GLRenderer = class {
     this.textures.clear();
     this.textCache.clear();
     this.p2 = this.program(VS_2D, FS_2D, ["u_cam", "u_off", "u_res", "u_tex"]);
-    this.p3 = this.program(VS_3D, FS_3D, ["u_vp", "u_light", "u_tex", "u_shadow", "u_useTex", "u_unlit", "u_shadows", "u_texel", "u_cutout", "u_sun", "u_sunCol", "u_sky", "u_ground", "u_fogCol", "u_eye", "u_fog"]);
+    this.p3 = this.program(VS_3D, FS_3D, ["u_vp", "u_light", "u_tex", "u_shadow", "u_useTex", "u_unlit", "u_shadows", "u_texel", "u_cutout", "u_shine", "u_soft", "u_sun", "u_sunCol", "u_sky", "u_ground", "u_fogCol", "u_eye", "u_fog"]);
     this.pd = this.program(VS_DEPTH, FS_DEPTH, ["u_light"]);
     this.vao2 = gl.createVertexArray();
     this.vbo2 = gl.createBuffer();
@@ -1790,6 +2160,14 @@ var GLRenderer = class {
   mesh(item2) {
     this.items.push(item2);
   }
+  freeGeometry(g) {
+    const info = this.geoms.get(g);
+    if (!info) return;
+    this.gl.deleteVertexArray(info.vao);
+    this.gl.deleteBuffer(info.vb);
+    this.gl.deleteBuffer(info.ib);
+    this.geoms.delete(g);
+  }
   geom(g) {
     let info = this.geoms.get(g);
     if (info) return info;
@@ -1813,7 +2191,7 @@ var GLRenderer = class {
       gl.vertexAttribDivisor(i, 1);
     }
     gl.bindVertexArray(null);
-    info = { vao, count: g.indices.length };
+    info = { vao, vb, ib, count: g.indices.length };
     this.geoms.set(g, info);
     return info;
   }
@@ -1833,7 +2211,7 @@ var GLRenderer = class {
         clear.push({ it, depth: dx * dx + dy * dy + dz * dz });
         continue;
       }
-      const key = `${it.geom.id}|${it.texture?.name ?? ""}|${it.unlit}|${it.cutout}`;
+      const key = `${it.geom.id}|${it.texture?.name ?? ""}|${it.unlit}|${it.cutout}|${it.shine}`;
       let g = groups.get(key);
       if (!g) groups.set(key, g = []);
       g.push(it);
@@ -1858,13 +2236,13 @@ var GLRenderer = class {
       g.sort((a, b) => +b.castShadow - +a.castShadow);
       const it = g[0], start = n;
       for (const x of g) write(x);
-      buckets.push({ geom: it.geom, tex: it.texture, unlit: it.unlit, cutout: it.cutout, start, count: g.length, casters: g.filter((x) => x.castShadow).length });
+      buckets.push({ geom: it.geom, tex: it.texture, unlit: it.unlit, cutout: it.cutout, shine: it.shine, start, count: g.length, casters: g.filter((x) => x.castShadow).length });
     }
     const opaque = buckets.length;
     for (const { it } of clear) {
       const start = n;
       write(it);
-      buckets.push({ geom: it.geom, tex: it.texture, unlit: it.unlit, cutout: it.cutout, start, count: 1, casters: 0 });
+      buckets.push({ geom: it.geom, tex: it.texture, unlit: it.unlit, cutout: it.cutout, shine: it.shine, start, count: 1, casters: 0 });
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instBuf);
     gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, n * FLOATS_INSTANCE), gl.STREAM_DRAW);
@@ -1890,7 +2268,8 @@ var GLRenderer = class {
     gl.uniform3f(u.u_fogCol, f?.color.r ?? 0, f?.color.g ?? 0, f?.color.b ?? 0);
     gl.uniform2f(u.u_fog, f?.near ?? 0, f?.far ?? 0);
     gl.uniform1f(u.u_shadows, useShadows ? 1 : 0);
-    gl.uniform1f(u.u_texel, 0.75 / SHADOW_SIZE);
+    gl.uniform1f(u.u_texel, 1.5 / SHADOW_SIZE);
+    gl.uniform1f(u.u_soft, light.softShadows ? 1 : 0);
     gl.uniform1i(u.u_tex, 0);
     gl.uniform1i(u.u_shadow, 1);
     gl.activeTexture(gl.TEXTURE1);
@@ -1908,6 +2287,7 @@ var GLRenderer = class {
       gl.uniform1f(u.u_useTex, b.tex ? 1 : 0);
       gl.uniform1f(u.u_unlit, b.unlit ? 1 : 0);
       gl.uniform1f(u.u_cutout, b.cutout ? 1 : 0);
+      gl.uniform1f(u.u_shine, b.shine);
       if (b.cutout) gl.disable(gl.CULL_FACE);
       if (b.tex) gl.bindTexture(gl.TEXTURE_2D, this.texture(b.tex));
       gl.drawElementsInstanced(gl.TRIANGLES, info.count, gl.UNSIGNED_INT, 0, b.count);
@@ -2001,6 +2381,21 @@ var GLRenderer = class {
       this.vertex(m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5], 0, 0, col, 0, 0, 0, 0, MODE_SOLID);
     }
   }
+  clip(x, y = 0, w = 0, h = 0) {
+    this.flush();
+    const gl = this.gl, [vx, vy, vw, vh] = this.vp;
+    if (x === null) {
+      gl.scissor(vx, vy, vw, vh);
+      return;
+    }
+    const sx = vw / this.view.width, sy = vh / this.view.height;
+    gl.scissor(Math.round(vx + x * sx), Math.round(vy + vh - (y + h) * sy), Math.round(w * sx), Math.round(h * sy));
+  }
+  blend(additive) {
+    this.flush();
+    const gl = this.gl;
+    gl.blendFunc(gl.ONE, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+  }
   flush() {
     if (!this.n2 || this.lost) {
       this.n2 = 0;
@@ -2022,6 +2417,17 @@ var GLRenderer = class {
     gl.bindVertexArray(null);
     this.stats.drawCalls++;
     this.n2 = 0;
+  }
+  refresh(asset) {
+    const t = this.textures.get(asset);
+    if (t) t.loaded = false;
+  }
+  freeTexture(asset) {
+    const t = this.textures.get(asset);
+    if (!t) return;
+    this.flush();
+    this.gl.deleteTexture(t.tex);
+    this.textures.delete(asset);
   }
   texture(asset) {
     const gl = this.gl;
@@ -2859,6 +3265,7 @@ var Scene = class {
     sky: new Color(0.62, 0.68, 0.78),
     ground: new Color(0.36, 0.33, 0.3),
     shadows: true,
+    softShadows: false,
     shadowRange: 24,
     fog: null
   };
@@ -2889,6 +3296,13 @@ var Scene = class {
   flashDur = 0;
   pressedEntity = null;
   order = 0;
+  /** World speed: 0.3 is slow motion. UI runs at full speed. */
+  timeScale = 1;
+  frozen = 0;
+  /** True during s.freeze(). */
+  get isFrozen() {
+    return this.frozen > 0;
+  }
   get input() {
     return this.game.input;
   }
@@ -3061,9 +3475,16 @@ var Scene = class {
     return this.entities.some((e) => e.dim === 3) ? 3 : 2;
   }
   /** Shake both cameras. `amount` is world units at the start. */
-  shake(amount, seconds = 0.3) {
-    this.shakeAmt = amount ?? (this.dominantDim() === 3 ? 0.25 : 6);
+  shake(amount, seconds = 0.3, o = {}) {
+    const usual = this.dominantDim() === 3 ? 0.25 : 6;
+    this.shakeAmt = amount ?? usual;
     this.shakeLeft = this.shakeDur = seconds;
+    const power = this.shakeAmt / usual;
+    if (o.haptic !== false) this.game.haptics._auto(power < 0.5 ? "light" : power < 1.5 ? "medium" : "heavy");
+  }
+  /** Hit-stop: hold the world still for a moment so an impact lands. UI, shake and flash keep running. */
+  freeze(seconds = 0.06) {
+    this.frozen = Math.max(this.frozen, seconds);
   }
   /** Flash the whole screen and fade out. */
   flash(c = "#ffffff", seconds = 0.2) {
@@ -3080,26 +3501,31 @@ var Scene = class {
     this.cam._snapshot();
     this.cam3._snapshot();
     this.dispatchTaps();
-    const run = !this.paused;
+    const held = this.frozen > 0;
+    if (held) {
+      this.frozen -= dt;
+      this.game.input._holdPresses();
+    } else this.game.input._releasePresses();
+    const run = !this.paused && !held, world = dt * Math.max(0, this.timeScale);
     if (run) {
-      this.time += dt;
-      this.stepTimers(dt);
-      this.stepTweens(dt);
-      for (const fn of [...this.updaters]) fn(dt);
+      this.time += world;
+      this.stepTimers(world);
+      this.stepTweens(world);
+      for (const fn of [...this.updaters]) fn(world);
     }
     const count = this.entities.length;
     for (let i = 0; i < count; i++) {
       const e = this.entities[i];
       if (!e.alive || e.paused || !run && !e.ui) continue;
       for (const [, fn] of e._hooksUpdate) {
-        fn.call(e, dt, e);
+        fn.call(e, e.ui ? dt : world, e);
         if (!e.alive) break;
       }
     }
     if (run) {
-      stepPhysics(this, dt);
+      stepPhysics(this, world);
       flushContacts(this);
-      this.stepParticles(dt);
+      this.stepParticles(world);
     }
     this.cam._step(dt);
     this.cam3._step(dt);
@@ -3209,6 +3635,7 @@ var Scene = class {
   }
   dispatchTaps() {
     const input = this.game.input, raw = input._raw();
+    for (const p of input.extraPresses) this._hitTappable(p.x, p.y)?.emit("tap");
     if (raw.pressed) {
       const top = this._hitTappable(raw.x, raw.y);
       if (top) {
@@ -3356,6 +3783,7 @@ var TouchControls = class {
       if (Math.hypot(x - b.x, y - b.y) <= reach) {
         this.held.set(id, b.action);
         input.codeDown(`touch:${b.action}`);
+        this.game.haptics._auto("tick");
         return true;
       }
     }
@@ -3488,6 +3916,7 @@ var Game = class {
     this.touch = new TouchControls(this, options.touch ?? {});
     this.assets = new Assets(this);
     this.audio = new Audio(this);
+    this.haptics = new Haptics(this, options.haptics);
     this.input = new Input(this, options.actions);
     this.draw = new Draw(this);
     if (this.headless) {
@@ -3516,6 +3945,7 @@ var Game = class {
   touch;
   assets;
   audio;
+  haptics;
   /** Gameplay randomness. Same seed, same sequence. */
   rng;
   /** Cosmetic randomness, separate so that effects never change gameplay. */
@@ -3535,6 +3965,10 @@ var Game = class {
   letterbox;
   /** @internal */
   _alpha = 1;
+  /** How far the current frame sits between the last two steps, 0 to 1, for smoothing custom draws. */
+  get alpha() {
+    return this._alpha;
+  }
   _mouseLook = false;
   scenes = /* @__PURE__ */ new Map();
   draw;
@@ -3577,6 +4011,7 @@ var Game = class {
     this.nextScene = null;
     this.input.reset();
     this.input.used.clear();
+    this.current?.emit("leave");
     this.current = new Scene(this, n.name);
     this.currentName = n.name;
     this.currentArgs = n.args;
@@ -3739,8 +4174,8 @@ var Game = class {
   }
   // --- Services -----------------------------------------------------------------------------
   /** Play a sound effect: a preset name, a loaded sound, or a custom tone. */
-  sfx(sound) {
-    this.audio.play(sound);
+  sfx(sound, o) {
+    this.audio.play(sound, o);
   }
   music(song) {
     this.audio.playMusic(song);
@@ -3750,10 +4185,11 @@ var Game = class {
   }
   /** Haptic pulse on phones that support it. */
   vibrate(ms = 12) {
-    try {
-      if (typeof navigator !== "undefined") navigator.vibrate?.(ms);
-    } catch {
-    }
+    this.haptics.play(ms);
+  }
+  /** Pulse: "tick light medium heavy success warn error", a length in ms, or a pattern. */
+  haptic(kind) {
+    this.haptics.play(kind);
   }
   /** Persist a JSON value. Web views can block storage, so this falls back to memory. */
   save(key, value) {
@@ -4063,6 +4499,7 @@ var mesh = (name, o = {}) => ({
   id: "mesh",
   mesh: name,
   unlit: o.unlit ?? false,
+  shine: o.shine ?? 0,
   castShadow: o.shadow ?? true,
   texture: o.texture ?? null,
   setup(e) {
@@ -4075,7 +4512,7 @@ var mesh = (name, o = {}) => ({
     if (o.texture) e.scene.game.assets.sprite(o.texture);
   },
   draw(d, e) {
-    d.mesh(e.mesh, e.world, { size: e.size, color: e.color, texture: e.texture, unlit: e.unlit, castShadow: e.castShadow });
+    d.mesh(e.mesh, e.world, { size: e.size, color: e.color, texture: e.texture, unlit: e.unlit, castShadow: e.castShadow, shine: e.shine });
   }
 });
 var billboard = (name, o = {}) => ({
@@ -4162,13 +4599,14 @@ var tap = (fn, o = {}) => ({
   id: "tap",
   setup(e) {
     e.tappable = { pad: o.pad ?? 0 };
+    e.on("tap", () => e.scene.game.haptics._auto("tick"));
     if (fn) e.on("tap", fn);
   }
 });
 var button = (label, o = {}) => {
   const textSize = o.textSize ?? 18;
   const style = { size: textSize, font: "system-ui, -apple-system, Roboto, sans-serif", bold: true, align: "center", maxWidth: 0, lineHeight: 1.2 };
-  const fill = color(o.color ?? "#3b82f6"), ink = o.textColor ?? "#ffffff";
+  const fill = color(o.color ?? "#3b82f6"), ink2 = o.textColor ?? "#ffffff";
   return {
     id: "button",
     buttonLabel: label,
@@ -4177,6 +4615,7 @@ var button = (label, o = {}) => {
       e.size.set(o.width ?? Math.max(m.width + 36, 120), o.height ?? 52, 0);
       e.tappable = { pad: 0 };
       e._isButton = true;
+      e.on("tap", () => e.scene.game.haptics._auto("light"));
       if (o.onTap) e.on("tap", o.onTap);
     },
     add(e) {
@@ -4191,7 +4630,7 @@ var button = (label, o = {}) => {
     draw(d, e) {
       d.rect(e.size.x, e.size.y, { y: 3, color: fill.lerp("#000000", 0.35), radius: o.radius ?? 14 });
       d.rect(e.size.x, e.size.y, { color: e._pressed ? fill.lerp("#000000", 0.15) : fill, radius: o.radius ?? 14 });
-      d.text(label, { ...style, color: ink });
+      d.text(label, { ...style, color: ink2 });
     }
   };
 };
@@ -4238,6 +4677,8 @@ export {
   Draw,
   Entity,
   Game,
+  HAPTICS,
+  Haptics,
   Input,
   PALETTE,
   Pixmap,

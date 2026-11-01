@@ -105,11 +105,18 @@ export class Input {
     }
 
     /** All active touches, in view units. */
-    get touches() { this.used.add("pointer"); return [...this.pointers.values()].filter((p) => !p.captured).map((p) => ({ id: p.id, x: p.x, y: p.y })); }
+    get touches() { this.used.add("pointer"); return [...this.pointers.values()].filter((p) => !p.captured).map((p) => ({ id: p.id, x: p.x, y: p.y, pressed: p.steps === 1 })); }
 
     /** @internal Tap dispatch reads raw edges, because it decides what gets consumed. */
     _raw() { return { x: this.px, y: this.py, pressed: this.pPressed, released: this.pReleased, tapped: this.pTapped }; }
     /** @internal Read an action without counting it as a gameplay dependency in the audit. */
+    /** @internal Hit-stop must not eat what the player pressed during it, so these replay on the first step after. */
+    _holdPresses() { for (const [action, st] of this.states) if (st.pressed) this.held.add(action); }
+    /** @internal */
+    _releasePresses() {
+        for (const action of this.held) this.states.get(action)!.pressed = true;
+        this.held.clear();
+    }
     _quiet(action: string) { return this.states.get(action)?.pressed ?? false; }
     /** Stop gameplay seeing the current touch. Buttons do this automatically. */
     consumePointer() { this.pConsumed = true; }
@@ -157,11 +164,13 @@ export class Input {
         this.pConsumed = false;
         this._swipe = null;
         const ox = this.px, oy = this.py;
+        this.extraPresses.length = 0;
         const queue = this.queue;
         this.queue = [];
         for (const ev of queue) this.handlePointer(ev);
-        this.pDx = this.px - ox;
-        this.pDy = this.py - oy;
+        // A new touch lands anywhere, which isn't movement.
+        this.pDx = this.pPressed ? 0 : this.px - ox;
+        this.pDy = this.pPressed ? 0 : this.py - oy;
         this.look.set(this.pendingLook.x + this.padLook.x * 8, this.pendingLook.y + this.padLook.y * 8, 0);
         this.pendingLook.set(0, 0, 0);
         this.wheel = this.pendingWheel;
@@ -197,7 +206,7 @@ export class Input {
                 this.pPressed = true;
                 this.px = ev.x;
                 this.py = ev.y;
-            }
+            } else if (!p.captured) this.extraPresses.push(p);
             return;
         }
         const p = this.pointers.get(ev.id);
@@ -226,7 +235,12 @@ export class Input {
         }
     }
 
+    private held = new Set<string>();
     private padsBlocked = false;
+    /** @internal Fingers that landed this step while another was already down. */
+    extraPresses: { x: number; y: number }[] = [];
+    /** The gamepad in use, if any. */
+    activePad: Gamepad | null = null;
 
     private pollGamepads() {
         this.padStick.set(0, 0, 0);
@@ -236,8 +250,10 @@ export class Input {
         // Embeds can forbid gamepads through a permissions policy, and then this throws on every call.
         try { pads = navigator.getGamepads(); } catch { this.padsBlocked = true; return; }
         const dz = (v: number) => (Math.abs(v) < 0.18 ? 0 : v);
+        this.activePad = null;
         for (const pad of pads) {
             if (!pad) continue;
+            this.activePad = pad;
             for (const [i, code] of PAD_BUTTONS) {
                 if (pad.buttons[i]?.pressed) this.codeDown(code);
                 else this.codeUp(code);

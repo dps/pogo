@@ -50,7 +50,7 @@ export class Scene {
     readonly cam3: Camera3D;
     readonly light: Light3D = {
         dir: new Vec(-0.5, -1, -0.35), color: new Color(0.85, 0.82, 0.74), sky: new Color(0.62, 0.68, 0.78), ground: new Color(0.36, 0.33, 0.3),
-        shadows: true, shadowRange: 24, fog: null,
+        shadows: true, softShadows: false, shadowRange: 24, fog: null,
     };
     /** Gravity for 2D bodies, in units/s². y is down. */
     gravity2 = new Vec(0, 1400);
@@ -86,6 +86,11 @@ export class Scene {
         this.cam3 = new Camera3D(() => game.view);
     }
 
+    /** World speed: 0.3 is slow motion. UI runs at full speed. */
+    timeScale = 1;
+    private frozen = 0;
+    /** True during s.freeze(). */
+    get isFrozen() { return this.frozen > 0; }
     get input() { return this.game.input; }
     get rng() { return this.game.rng; }
     get view() { return this.game.view; }
@@ -218,10 +223,15 @@ export class Scene {
     }
     private dominantDim(): 2 | 3 { return this.entities.some((e) => e.dim === 3) ? 3 : 2; }
     /** Shake both cameras. `amount` is world units at the start. */
-    shake(amount?: number, seconds = 0.3) {
-        this.shakeAmt = amount ?? (this.dominantDim() === 3 ? 0.25 : 6);
+    shake(amount?: number, seconds = 0.3, o: { haptic?: boolean } = {}) {
+        const usual = this.dominantDim() === 3 ? 0.25 : 6;
+        this.shakeAmt = amount ?? usual;
         this.shakeLeft = this.shakeDur = seconds;
+        const power = this.shakeAmt / usual;
+        if (o.haptic !== false) this.game.haptics._auto(power < 0.5 ? "light" : power < 1.5 ? "medium" : "heavy");
     }
+    /** Hit-stop: hold the world still for a moment so an impact lands. UI, shake and flash keep running. */
+    freeze(seconds = 0.06) { this.frozen = Math.max(this.frozen, seconds); }
     /** Flash the whole screen and fade out. */
     flash(c: ColorLike = "#ffffff", seconds = 0.2) {
         this.flashColor = color(c);
@@ -235,26 +245,29 @@ export class Scene {
         this.cam._snapshot();
         this.cam3._snapshot();
         this.dispatchTaps();
-        const run = !this.paused;
+        const held = this.frozen > 0;
+        if (held) { this.frozen -= dt; this.game.input._holdPresses(); }
+        else this.game.input._releasePresses();
+        const run = !this.paused && !held, world = dt * Math.max(0, this.timeScale);
         if (run) {
-            this.time += dt;
-            this.stepTimers(dt);
-            this.stepTweens(dt);
-            for (const fn of [...this.updaters]) fn(dt);
+            this.time += world;
+            this.stepTimers(world);
+            this.stepTweens(world);
+            for (const fn of [...this.updaters]) fn(world);
         }
         const count = this.entities.length; // entities added mid-step start next step
         for (let i = 0; i < count; i++) {
             const e = this.entities[i];
             if (!e.alive || e.paused || (!run && !e.ui)) continue;
             for (const [, fn] of e._hooksUpdate) {
-                fn.call(e, dt, e);
+                fn.call(e, e.ui ? dt : world, e);
                 if (!e.alive) break;
             }
         }
         if (run) {
-            stepPhysics(this, dt);
+            stepPhysics(this, world);
             flushContacts(this);
-            this.stepParticles(dt);
+            this.stepParticles(world);
         }
         this.cam._step(dt);
         this.cam3._step(dt);
@@ -351,6 +364,8 @@ export class Scene {
 
     private dispatchTaps() {
         const input = this.game.input, raw = input._raw();
+        // A thumb holding one button mustn't stop the other pressing the next.
+        for (const p of input.extraPresses) this._hitTappable(p.x, p.y)?.emit("tap");
         if (raw.pressed) {
             const top = this._hitTappable(raw.x, raw.y);
             if (top) { this.pressedEntity = top; top._pressed = true; }

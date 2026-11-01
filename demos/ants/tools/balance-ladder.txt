@@ -1,0 +1,9 @@
+rusher    6/6 138s    6/6 142s    6/6 144s    6/6 148s   
+boomer    6/6 136s    6/6 135s    6/6 143s    4/6 161s   
+turtle    6/6 145s    6/6 162s    5/6 204s    3/6 260s   
+harrier   6/6 137s    6/6 138s    6/6 143s    6/6 156s   
+empress   6/6 140s    6/6 144s    4/6 156s    2/6 168s   
+ALL       100% 139s   100% 144s   90% 158s    70% 179s     (columns: Easy Normal Hard Brutal )
+Normal beats Easy: 11/15
+Hard beats Normal: 10/15
+Brutal beats Hard: 12/15

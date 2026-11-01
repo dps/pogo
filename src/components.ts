@@ -116,6 +116,8 @@ export interface MeshOptions {
     /** Sprite asset used as a texture. */
     texture?: string;
     /** Ignores lighting and fog-free glow; good for lasers, pickups and sky objects. */
+    /** Gloss from 0 (matte) to 1 (polished): a sun highlight and a sky reflection at grazing angles. */
+    shine?: number;
     unlit?: boolean;
     /** Default true. */
     shadow?: boolean;
@@ -126,6 +128,7 @@ export const mesh = (name: string, o: MeshOptions = {}): Component => ({
     id: "mesh",
     mesh: name,
     unlit: o.unlit ?? false,
+    shine: o.shine ?? 0,
     castShadow: o.shadow ?? true,
     texture: o.texture ?? null,
     setup(e) {
@@ -137,7 +140,7 @@ export const mesh = (name: string, o: MeshOptions = {}): Component => ({
         if (o.color) e.color = o.color;
         if (o.texture) e.scene.game.assets.sprite(o.texture);
     },
-    draw(d, e) { d.mesh(e.mesh, e.world, { size: e.size, color: e.color, texture: e.texture, unlit: e.unlit, castShadow: e.castShadow }); },
+    draw(d, e) { d.mesh(e.mesh, e.world, { size: e.size, color: e.color, texture: e.texture, unlit: e.unlit, castShadow: e.castShadow, shine: e.shine }); },
 });
 
 /** A sprite standing in 3D space that always faces the camera. `size` is the world height. */
@@ -242,7 +245,7 @@ export const ui = (): Component => ({ id: "ui", setup(e) { e.ui = true; } });
 /** Make something tappable; hit area grows to at least 44 CSS px on touch. Listen with onTap or e.onTap(). */
 export const tap = (fn?: () => void, o: { pad?: number } = {}): Component => ({
     id: "tap",
-    setup(e) { e.tappable = { pad: o.pad ?? 0 }; if (fn) e.on("tap", fn); },
+    setup(e) { e.tappable = { pad: o.pad ?? 0 }; e.on("tap", () => e.scene.game.haptics._auto("tick")); if (fn) e.on("tap", fn); },
 });
 
 export interface ButtonOptions {
@@ -270,6 +273,7 @@ export const button = (label: string, o: ButtonOptions = {}): Component => {
             e.size.set(o.width ?? Math.max(m.width + 36, 120), o.height ?? 52, 0);
             e.tappable = { pad: 0 };
             e._isButton = true;
+            e.on("tap", () => e.scene.game.haptics._auto("light"));
             if (o.onTap) e.on("tap", o.onTap);
         },
         add(e) { if (e.parent?.ui) e.ui = true; },

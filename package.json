@@ -9,7 +9,7 @@
   "types": "./dist/pogo.d.ts",
   "exports": { ".": { "types": "./dist/pogo.d.ts", "default": "./dist/pogo.js" } },
   "bin": { "pogo": "./bin/pogo.js" },
-  "files": ["dist/", "bin/", "template/", "AGENTS.md", "README.md"],
+  "files": ["dist/", "bin/", "template/", "docs/", "demos/", "AGENTS.md", "README.md"],
   "scripts": {
     "build": "node scripts/build.js",
     "typecheck": "tsc --noEmit",
@@ -24,5 +24,5 @@
     "playwright-core": "^1.50.0",
     "typescript": "^5.6.3"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=24" }
 }

@@ -551,3 +551,158 @@ test("save and load round-trip", () => {
     assert.deepEqual(g.load("k"), { a: 1 });
     assert.equal(g.load("missing", 5), 5);
 });
+
+test("haptics fire by default from buttons, presets and shake, and are logged", () => {
+    const game = createGame({ headless: true });
+    let tapped = 0;
+    game.scene("a", (s) => { s.add([button("Go", { onTap: () => tapped++ }), pin("center")]); });
+    game.start("a");
+    game.step(1);
+    const v = game.view;
+    game.input.tap(v.width / 2, v.height / 2);
+    game.step(3);
+    assert.equal(tapped, 1);
+    assert.deepEqual(game.haptics.log, ["light"]);
+    game.step(10);
+    game.sfx("explode");
+    assert.equal(game.state().haptics.at(-1), "heavy");
+    game.step(10);
+    game.current.shake();
+    assert.equal(game.haptics.log.at(-1), "medium");
+});
+
+test("haptics merge close pulses, keep the stronger, and can be turned off", () => {
+    const game = createGame({ headless: true });
+    game.scene("a", () => {});
+    game.start("a");
+    game.haptic("heavy");
+    game.haptic("tick");
+    assert.deepEqual(game.haptics.log, ["heavy"]);
+    game.step(1);
+    game.haptic("error");
+    assert.deepEqual(game.haptics.log, ["heavy", "error"]);
+    assert.throws(() => game.haptic("hevy"), /UNKNOWN_HAPTIC/);
+    const quiet = createGame({ headless: true, haptics: false });
+    quiet.scene("a", () => {});
+    quiet.start("a");
+    quiet.sfx("explode");
+    quiet.haptic("heavy");
+    assert.equal(quiet.haptics.log.length, 0);
+    const manual = createGame({ headless: true, haptics: { auto: false } });
+    manual.scene("a", () => {});
+    manual.start("a");
+    manual.sfx("explode");
+    assert.equal(manual.haptics.log.length, 0);
+    manual.haptic("tick");
+    assert.equal(manual.haptics.log.length, 1);
+});
+
+test("freeze holds the world while UI runs, and timeScale slows it", () => {
+    const game = createGame({ headless: true });
+    let world = 0, ui = 0;
+    game.scene("a", (s) => {
+        s.onUpdate((dt) => { world += dt; });
+        s.add([pin("center"), { update(dt) { ui += dt; } }]);
+        s.freeze(0.1);
+    });
+    game.start("a");
+    game.step(6);
+    assert.equal(world, 0);
+    assert.ok(ui > 0.09);
+    game.step(6);
+    assert.ok(world > 0);
+    const before = world;
+    game.current.timeScale = 0.5;
+    game.step(60);
+    assert.ok(Math.abs(world - before - 0.5) < 0.01);
+});
+
+test("the song clock follows steps in headless runs", () => {
+    const game = createGame({ headless: true });
+    game.scene("a", () => {});
+    game.start("a");
+    assert.equal(game.audio.song.playing, false);
+    game.music({ bpm: 120, steps: 2, tracks: [{ notes: "C4 - E4 -" }] });
+    game.step(60);
+    const c = game.audio.song;
+    assert.ok(c.playing);
+    assert.ok(Math.abs(c.time - 1) < 1e-6);
+    assert.ok(Math.abs(c.beat - 2) < 1e-6);
+    assert.equal(c.length, 1);
+});
+
+test("lathe builds a closed turned mesh", () => {
+    const game = createGame({ headless: true });
+    game.assets.lathe("cup", [[0, 0], [1, 0], [1, 0], [1, 2], [0, 2]], { segments: 8 });
+    const g = game.assets.geometry("cup");
+    assert.ok(Math.abs(g.natural.y - 2) < 1e-6);
+    assert.ok(Math.abs(g.natural.x - 2) < 1e-6);
+});
+
+test("new touches don't count as pointer movement", () => {
+    const game = createGame({ headless: true });
+    game.scene("a", () => {});
+    game.start("a");
+    game.input.tap(300, 400);
+    game.step(1);
+    assert.equal(game.input.pointer.dx, 0);
+    assert.equal(game.input.pointer.dy, 0);
+});
+
+test("assets can be freed, regridded and refreshed", () => {
+    const game = createGame({ headless: true });
+    game.assets.paint("sheet", 32, 32, () => {}, { frames: 4 });
+    game.assets.grid("sheet", 2, 2);
+    const a = game.assets.sprite("sheet");
+    assert.deepEqual([a.cols, a.rows, a.frameW, a.frameH], [2, 2, a.width / 2, 16]);
+    game.assets.refresh("sheet");
+    game.assets.lathe("cup", [[0, 0], [1, 2]]);
+    game.assets.free("cup");
+    game.assets.free("sheet");
+    assert.throws(() => game.assets.geometry("cup"), /UNKNOWN/);
+    assert.throws(() => game.assets.sprite("sheet"), /UNKNOWN_SPRITE/);
+});
+
+test("a second finger presses buttons and touches report their first step", () => {
+    const game = createGame({ headless: true });
+    let tapped = 0;
+    game.scene("a", (s) => { s.add([button("Go", { onTap: () => tapped++ }), pin("center")]); });
+    game.start("a");
+    game.step(1);
+    const v = game.view;
+    game.input.pointerEvent("down", 1, 20, 20);
+    game.step(2);
+    game.input.pointerEvent("down", 2, v.width / 2, v.height / 2);
+    game.step(1);
+    assert.equal(tapped, 1);
+    assert.equal(game.input.touches.find((t) => t.id === 2).pressed, true);
+    game.step(1);
+    assert.equal(game.input.touches.find((t) => t.id === 2).pressed, false);
+    assert.equal(tapped, 1);
+});
+
+test("scenes hear when they're left", () => {
+    const game = createGame({ headless: true });
+    let left = 0;
+    game.scene("a", (s) => { s.on("leave", () => left++); });
+    game.scene("b", () => {});
+    game.start("a");
+    game.go("b");
+    game.step(2);
+    assert.equal(left, 1);
+});
+
+test("a press during hit-stop isn't lost", () => {
+    const game = createGame({ headless: true });
+    let jumps = 0;
+    game.scene("a", (s) => { s.onUpdate(() => { if (s.input.pressed("jump")) jumps++; }); });
+    game.start("a");
+    game.step(1);
+    game.current.freeze(0.1);
+    game.step(2);
+    game.input.press("jump", 1);
+    game.step(1);
+    assert.equal(jumps, 0);
+    game.step(10);
+    assert.equal(jumps, 1);
+});

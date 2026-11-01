@@ -18,7 +18,8 @@ function flag(name, fallback) {
 
 const USAGE = `pogo: a 2D + 3D web game framework for coding agents
 
-  pogo new <dir>                  Create a game (pogo.js, game.js, index.html, AGENTS.md)
+  pogo list [search]              Find a game to fork: pogo list racing
+  pogo new <dir> [--from <game>]  Create a game, or fork one from demos/: pogo new games/mine --from kart
   pogo check <game.js> [options]  Play it headless on phone, tablet and desktop profiles
       --steps <n>    Steps per device (default 1800, 30 s of play)
       --seed <n>     Bot seed
@@ -136,7 +137,10 @@ async function shot() {
     if (!d) { console.error(`Unknown device. Known: ${Object.keys(DEVICES).join(", ")}`); process.exit(1); }
     let chromium;
     try { ({ chromium } = await import("playwright-core")); } catch { console.error("pogo shot needs playwright-core: npm i -D playwright-core"); process.exit(1); }
-    const port = 5200 + (process.pid % 700), server = serveDir(resolve(rest[0] ?? "."), port);
+    // Port 0 lets the system pick, so parallel shots never collide.
+    const server = serveDir(resolve(rest[0] ?? "."), 0);
+    await new Promise((r) => server.once("listening", r));
+    const port = server.address().port;
     const browser = await chromium.launch({ headless: true, channel: process.env.CHROME_PATH ? undefined : "chrome", executablePath: process.env.CHROME_PATH, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
     const touch = deviceName !== "desktop";
     const ctx = await browser.newContext({ viewport: { width: d.width, height: d.height }, deviceScaleFactor: dprFlag ? Number(dprFlag) : Math.min(d.dpr, 2), isMobile: touch, hasTouch: touch });
@@ -167,13 +171,29 @@ async function shot() {
     process.exit(failed || problems.length ? 1 : 0);
 }
 
+function catalog() { return JSON.parse(readFileSync(join(root, "demos/catalog.json"), "utf8")).filter((g) => existsSync(join(root, "demos", g.folder, "game.js"))); }
+
+function list(words) {
+    const hit = (g) => words.every((w) => `${g.folder} ${g.title} ${g.mapsTo} ${g.view} ${g.tags.join(" ")}`.toLowerCase().includes(w.toLowerCase()));
+    const games = catalog().filter(hit);
+    if (!games.length) { console.log(`Nothing matches. Run pogo list for all ${catalog().length} games.`); return; }
+    const wide = Math.max(...games.map((g) => g.folder.length));
+    for (const g of games) console.log(`${g.folder.padEnd(wide)}  ${g.view}  ${g.title}: ${g.mapsTo}`);
+    console.log(`\nFork one with: pogo new games/mygame --from ${games[0].folder}\nHow to change each one: AGENTS.md`);
+}
+
 function create(dir) {
-    if (!dir) { console.error("Usage: pogo new <dir>"); process.exit(1); }
+    const from = flag("from", "");
+    if (!dir) { console.error("Usage: pogo new <dir> [--from <game>]"); process.exit(1); }
     const target = resolve(dir);
     if (existsSync(target)) { console.error(`${target} already exists.`); process.exit(1); }
-    cpSync(join(root, "template"), target, { recursive: true });
-    writeFileSync(join(target, "AGENTS.md"), readFileSync(join(root, "AGENTS.md")));
-    console.log(`Created ${target}\n\n  pogo check ${dir}/game.js\n  pogo serve ${dir}\n`);
+    if (from && !catalog().some((g) => g.folder === from)) { console.error(`No game called "${from}". Run pogo list to see them.`); process.exit(1); }
+    const source = from ? join(root, "demos", from) : join(root, "template");
+    cpSync(source, target, { recursive: true, filter: (p) => !p.startsWith(join(source, "shots")) });
+    for (const f of ["pogo.js", "pogo.d.ts"]) writeFileSync(join(target, f), readFileSync(join(root, "dist", f)));
+    writeFileSync(join(target, "AGENTS.md"), readFileSync(join(root, "docs/API.md")));
+    console.log(`Created ${target}${from ? ` from ${from}` : ""}\n\n  pogo check ${dir}/game.js\n  pogo serve ${dir}\n`);
+    if (from) console.log(`Next: the "After forking" checklist and the notes for ${from} in AGENTS.md at the repo root.\nChange the save keys first, or this game will overwrite the original's saves.\n`);
 }
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav", ".css": "text/css", ".svg": "image/svg+xml", ".ts": "text/plain", ".map": "application/json" };
@@ -196,7 +216,8 @@ function serveDir(base, port) {
 }
 
 if (cmd === "check") await check();
-else if (cmd === "new") create(rest[0]);
+else if (cmd === "new") { const dir = rest.find((a, i) => !a.startsWith("--") && rest[i - 1] !== "--from"); create(dir); }
+else if (cmd === "list") list(rest);
 else if (cmd === "serve") serve();
 else if (cmd === "shot") await shot();
 else console.log(USAGE);

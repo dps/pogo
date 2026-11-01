@@ -27,6 +27,7 @@ export function snapshot(g: Game) {
         paused: s?.paused ?? false,
         data: g.data,
         sounds: g.audio.log.slice(-8),
+        haptics: g.haptics.log.slice(-8),
         errors: g.errors.map((e) => e.message),
         entityCount: s?.entities.length ?? 0,
         entities: s?.entities.filter((e) => e.alive).slice(0, 200).map(describe) ?? [],

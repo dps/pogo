@@ -1,0 +1,7 @@
+M1: 3/3 wins, par 60s win 35s 3* me54 foe  | win 35s 3* me53 foe  | win 35s 3* me52 foe 
+M2: 3/3 wins, par 130s win 74s 3* me214 foe  | win 74s 3* me178 foe  | win 66s 3* me184 foe 
+M3: 3/3 wins, par 200s win 141s 3* me346 foe90  | win 140s 3* me374 foe90  | win 140s 3* me325 foe90 
+M4: 3/3 wins, par 110s win 66s 3* me191 foe  | win 65s 3* me185 foe  | win 65s 3* me186 foe 
+M5: 3/3 wins, par 190s win 118s 3* me376 foe  | win 124s 3* me387 foe  | win 118s 3* me367 foe 
+M6: 3/3 wins, par 460s win 311s 3* me403 foe130  | win 312s 3* me353 foe130  | win 204s 3* me208 foe120 
+every mission won at least once

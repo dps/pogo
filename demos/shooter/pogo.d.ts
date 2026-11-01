@@ -122,7 +122,6 @@ export interface SpriteAsset {
 }
 /** Default palette for pixel art and voxels. `.` and space are always empty. */
 export declare const PALETTE: Record<string, string>;
-/** A software canvas for painted sprites. It needs no DOM, so painted art also exists in headless runs. */
 export declare class Pixmap {
 	readonly width: number;
 	readonly height: number;
@@ -206,8 +205,56 @@ declare class Assets {
 	}): this;
 	/** Register a custom mesh from raw arrays. */
 	mesh(name: string, data: Parameters<typeof customGeometry>[0]): this;
+	/** Release a mesh or sprite's GPU memory when it's no longer used, such as a level's track. It can be defined again afterwards. */
+	free(name: string): void;
+	/** Upload a sprite again after changing its data, reusing the texture. */
+	refresh(name: string): void;
+	/** Read a painted sprite as a grid of frames, for sheets with several rows. */
+	grid(name: string, cols: number, rows: number): this;
+	/** Hold game.start() until this finishes, for art painted over several frames. */
+	wait(work: Promise<unknown>): this;
 	sprite(name: string): SpriteAsset;
+	/**
+	 * A turned shape from a profile of [radius, height] points, bottom to top: chess pieces, cups, wheels, bottles.
+	 * Repeat a point to get a hard edge there.
+	 */
+	lathe(name: string, profile: [
+		number,
+		number
+	][], o?: {
+		segments?: number;
+		color?: ColorLike;
+	}): this;
 	geometry(name: string): Geometry;
+}
+/** Vibration patterns in milliseconds: on, off, on, ... */
+export declare const HAPTICS: Record<string, number[]>;
+export type Haptic = string | number | number[];
+export declare class Haptics {
+	private game;
+	/** Recent pulses, newest last; visible in game.state(). */
+	readonly log: string[];
+	/** Automatic pulses from buttons, controls, presets and shake. Explicit play() calls ignore this. */
+	auto: boolean;
+	private on;
+	private lastStep;
+	private lastStrength;
+	private iosLabel;
+	constructor(game: Game, option?: boolean | {
+		auto?: boolean;
+	});
+	/** Master switch, for a settings toggle. game.load/save keeps the player's choice if you want it remembered. */
+	get enabled(): boolean;
+	set enabled(v: boolean);
+	/** Pulse now: a preset name, a length in ms, or a pattern. Close calls merge, and the stronger one wins. */
+	play(kind?: Haptic): void;
+	/** @internal A pulse the framework chose, which the game can turn off with haptics.auto. */
+	_auto(kind: Haptic | undefined): void;
+	private pulse;
+	private device;
+	private rumble;
+	/** iOS has no vibrate API, but Safari 18 and later tick when a switch toggles. It is one strength, and needs a recent gesture. */
+	private iosPulse;
 }
 export interface Tone {
 	wave?: OscillatorType | "noise";
@@ -225,9 +272,30 @@ export interface Tone {
 export type Sfx = Tone | Tone[];
 export declare const SFX: Record<string, Sfx>;
 export interface Track {
-	wave?: OscillatorType;
+	wave?: OscillatorType | "noise";
 	volume?: number;
+	/** Seconds each note rings. Default 1.4 steps. */
+	decay?: number;
+	attack?: number;
+	/** Multiplies the frequency across each note: 0.5 falls an octave, which makes kicks and toms from sine waves. */
+	slide?: number;
 	notes: string;
+}
+export interface Voice {
+	set(o: {
+		freq?: number;
+		volume?: number;
+	}): void;
+	stop(): void;
+}
+export interface SongClock {
+	playing: boolean; /** True while the audio device is stopped and time isn't moving. */
+	stalled: boolean; /** Seconds into the song as the player hears it. Keeps growing across loops. */
+	time: number; /** Beats since the start, fractional. */
+	beat: number; /** Note steps since the start, fractional. */
+	step: number;
+	bpm: number; /** Seconds in one loop. */
+	length: number;
 }
 export interface Song {
 	bpm?: number; /** Steps per beat. Default 2 (eighth notes). */
@@ -247,6 +315,8 @@ declare class Audio$1 {
 	private noise;
 	private buffers;
 	private music;
+	/** Added to song.time, for a player's calibration of their speakers. */
+	offset: number;
 	private unlocked;
 	private blocked;
 	constructor(game: Game);
@@ -258,7 +328,25 @@ declare class Audio$1 {
 	register(name: string): void;
 	load(name: string, url: string): Promise<void>;
 	/** Play a preset, a loaded sound, or a custom tone. */
-	play(sound: string | Sfx): void;
+	play(sound: string | Sfx, o?: {
+		haptic?: Haptic;
+	}): void;
+	/** Play a sound at an exact moment in the current song. Call it a little ahead of time; this is how rhythm games stay tight. */
+	playAt(sound: string | Sfx, songTime: number): void;
+	private start;
+	/**
+	 * A sound that plays until stopped, for engines, wind and drones. Change it every step with set(): it glides, so it never clicks.
+	 * Without audio this returns a handle that does nothing, so games never need to check.
+	 */
+	voice(o?: {
+		wave?: OscillatorType | "noise";
+		freq?: number;
+		volume?: number;
+	}): Voice;
+	/** Seconds from scheduling a sound to the player hearing it, plus their calibration. */
+	latency(): number;
+	/** Where the current song is. Falls back to the step clock when there's no audio, so bots and silent embeds still get a steady beat. */
+	get song(): SongClock;
 	private tone;
 	/** Loop a song written as note strings: { bpm: 120, tracks: [{ notes: "C4 E4 G4 - C5 - G4 -" }] }. */
 	playMusic(song: Song): void;
@@ -388,6 +476,7 @@ export declare class Input {
 		id: number;
 		x: number;
 		y: number;
+		pressed: boolean;
 	}[];
 	/** @internal Tap dispatch reads raw edges, because it decides what gets consumed. */
 	_raw(): {
@@ -398,6 +487,10 @@ export declare class Input {
 		tapped: boolean;
 	};
 	/** @internal Read an action without counting it as a gameplay dependency in the audit. */
+	/** @internal Hit-stop must not eat what the player pressed during it, so these replay on the first step after. */
+	_holdPresses(): void;
+	/** @internal */
+	_releasePresses(): void;
 	_quiet(action: string): boolean;
 	/** Stop gameplay seeing the current touch. Buttons do this automatically. */
 	consumePointer(): void;
@@ -419,7 +512,15 @@ export declare class Input {
 	/** @internal */
 	beginStep(): void;
 	private handlePointer;
+	private held;
 	private padsBlocked;
+	/** @internal Fingers that landed this step while another was already down. */
+	extraPresses: {
+		x: number;
+		y: number;
+	}[];
+	/** The gamepad in use, if any. */
+	activePad: Gamepad | null;
 	private pollGamepads;
 }
 export interface TextStyle {
@@ -455,6 +556,7 @@ export interface MeshItem {
 	unlit: boolean;
 	castShadow: boolean;
 	cutout: boolean;
+	shine: number;
 }
 export interface Light3D {
 	/** Direction the light travels, e.g. [-0.5, -1, -0.3]. */
@@ -463,6 +565,8 @@ export interface Light3D {
 	sky: Color;
 	ground: Color;
 	shadows: boolean;
+	/** Wider, smoother shadow edges for close-up scenes. Costs more per pixel. */
+	softShadows: boolean;
 	/** World radius around the camera target that receives shadows. */
 	shadowRange: number;
 	fog: {
@@ -485,8 +589,16 @@ export interface Renderer {
 	begin2D(camera: Float32Array | null): void;
 	quad(m: Float32Array, x0: number, y0: number, x1: number, y1: number, u0: number, v0: number, u1: number, v1: number, r: number, g: number, b: number, a: number, tex: unknown, mode: number, p0: number, p1: number, p2: number, p3: number): void;
 	tris(m: Float32Array, pts: number[], r: number, g: number, b: number, a: number): void;
+	blend(additive: boolean): void;
+	/** Clip to a rectangle in view units, or stop clipping with null. */
+	clip(x: number | null, y?: number, w?: number, h?: number): void;
 	endFrame(): void;
 	texture(asset: SpriteAsset): unknown;
+	/** Upload an asset's pixels again. */
+	refresh(asset: SpriteAsset): void;
+	/** Release GPU memory. */
+	freeGeometry(g: Geometry): void;
+	freeTexture(asset: SpriteAsset): void;
 	text(str: string, style: TextStyle): TextHandle;
 	measureText(str: string, style: TextStyle): TextLayout;
 	screenshot(): string | null;
@@ -506,6 +618,7 @@ export declare class Draw {
 	private game;
 	private m;
 	private alpha;
+	private stack;
 	private colors;
 	constructor(game: Game);
 	private get r();
@@ -514,6 +627,14 @@ export declare class Draw {
 	begin(e: Entity): void;
 	/** @internal Back to an untransformed, fully opaque state. */
 	reset(): void;
+	/** Save the transform. Pair with pop(). */
+	push(): void;
+	pop(): void;
+	translate(x: number, y: number): void;
+	rotate(angle: number): void;
+	scale(x: number, y?: number): void;
+	/** Everything drawn inside fn adds light instead of covering what's behind it: glows, sparks, lasers. */
+	additive(fn: () => void): void;
 	rect(w: number, h: number, o?: PaintOptions & {
 		radius?: number;
 		outline?: number;
@@ -532,8 +653,24 @@ export declare class Draw {
 		width?: number;
 		height?: number;
 		flipX?: boolean;
+		rot?: number;
+		crop?: [
+			number,
+			number,
+			number,
+			number
+		];
 	}): void;
-	text(str: string | number, o?: PaintOptions & Partial<TextStyle>): void;
+	text(str: string | number, o?: PaintOptions & Partial<TextStyle> & {
+		rot?: number;
+	}): void;
+	/**
+	 * The fast path for swarms. Returns put(x, y, w, h, rot, frame, r, g, b, a), which skips option parsing and color lookup.
+	 * Colors are 0 to 1. Keep one sheet per batch, because each texture change is a draw call.
+	 */
+	quads(name: string): (x: number, y: number, w: number, h: number, rot?: number, frame?: number, cr?: number, cg?: number, cb?: number, ca?: number) => void;
+	/** Clip everything drawn inside fn to a rectangle in view units, for scrolling lists and panels. */
+	clip(x: number, y: number, w: number, h: number, fn: () => void): void;
 	/** @internal Queue a mesh for the 3D pass. */
 	mesh(name: string, world: Float32Array, o: {
 		size: Vec;
@@ -541,6 +678,7 @@ export declare class Draw {
 		texture?: string | null;
 		unlit?: boolean;
 		castShadow?: boolean;
+		shine?: number;
 	}): void;
 	/** @internal */
 	billboard(name: string, e: Entity, o: {
@@ -869,6 +1007,11 @@ export declare class Scene {
 	private pressedEntity;
 	private order;
 	constructor(game: Game, name: string);
+	/** World speed: 0.3 is slow motion. UI runs at full speed. */
+	timeScale: number;
+	private frozen;
+	/** True during s.freeze(). */
+	get isFrozen(): boolean;
 	get input(): Input;
 	get rng(): Rng;
 	get view(): ViewState;
@@ -922,7 +1065,11 @@ export declare class Scene {
 	burst(o: BurstOptions): void;
 	private dominantDim;
 	/** Shake both cameras. `amount` is world units at the start. */
-	shake(amount?: number, seconds?: number): void;
+	shake(amount?: number, seconds?: number, o?: {
+		haptic?: boolean;
+	}): void;
+	/** Hit-stop: hold the world still for a moment so an impact lands. UI, shake and flash keep running. */
+	freeze(seconds?: number): void;
 	/** Flash the whole screen and fade out. */
 	flash(c?: ColorLike, seconds?: number): void;
 	/** @internal */
@@ -1018,6 +1165,10 @@ export interface GameOptions {
 	screen?: keyof typeof DEVICES | ScreenInfo;
 	/** Draw collider outlines. Also enabled by ?debug in the URL. */
 	debug?: boolean;
+	/** Haptic feedback. Default true; false turns it off, { auto: false } leaves only game.haptic() calls. */
+	haptics?: boolean | {
+		auto?: boolean;
+	};
 }
 export type SceneFn = (s: Scene, args: any) => void;
 export declare class Game {
@@ -1028,6 +1179,7 @@ export declare class Game {
 	readonly touch: TouchControls;
 	readonly assets: Assets;
 	readonly audio: Audio$1;
+	readonly haptics: Haptics;
 	/** Gameplay randomness. Same seed, same sequence. */
 	rng: Rng;
 	/** Cosmetic randomness, separate so that effects never change gameplay. */
@@ -1050,6 +1202,8 @@ export declare class Game {
 	letterbox: Color;
 	/** @internal */
 	_alpha: number;
+	/** How far the current frame sits between the last two steps, 0 to 1, for smoothing custom draws. */
+	get alpha(): number;
 	private _mouseLook;
 	private scenes;
 	private draw;
@@ -1107,6 +1261,7 @@ export declare class Game {
 		paused: boolean;
 		data: Record<string, any>;
 		sounds: string[];
+		haptics: string[];
 		errors: string[];
 		entityCount: number;
 		entities: Record<string, unknown>[];
@@ -1131,11 +1286,15 @@ export declare class Game {
 	/** True while the mouse is captured. */
 	get pointerLocked(): boolean;
 	/** Play a sound effect: a preset name, a loaded sound, or a custom tone. */
-	sfx(sound: string | Sfx): void;
+	sfx(sound: string | Sfx, o?: {
+		haptic?: Haptic;
+	}): void;
 	music(song: Song): void;
 	stopMusic(): void;
 	/** Haptic pulse on phones that support it. */
 	vibrate(ms?: number | number[]): void;
+	/** Pulse: "tick light medium heavy success warn error", a length in ms, or a pattern. */
+	haptic(kind?: Haptic): void;
 	/** Persist a JSON value. Web views can block storage, so this falls back to memory. */
 	save(key: string, value: unknown): void;
 	load<T = any>(key: string, fallback?: T): T;
@@ -1190,6 +1349,8 @@ export interface MeshOptions {
 	/** Sprite asset used as a texture. */
 	texture?: string;
 	/** Ignores lighting and fog-free glow; good for lasers, pickups and sky objects. */
+	/** Gloss from 0 (matte) to 1 (polished): a sun highlight and a sky reflection at grazing angles. */
+	shine?: number;
 	unlit?: boolean;
 	/** Default true. */
 	shadow?: boolean;

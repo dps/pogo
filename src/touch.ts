@@ -68,6 +68,7 @@ export class TouchControls {
             if (Math.hypot(x - b.x, y - b.y) <= reach) {
                 this.held.set(id, b.action);
                 input.codeDown(`touch:${b.action}`);
+                this.game.haptics._auto("tick");
                 return true;
             }
         }

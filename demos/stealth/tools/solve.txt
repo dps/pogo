@@ -1,0 +1,18 @@
+heist                     loot    time  margin  robust  guards
+ 1 Opening Night           1/1    22s     3    12/12   1
+ 2 The Long Gallery        1/1    27s     3    12/12   3
+ 3 Hall of Bones           1/1    54s     3    12/12   2
+ 4 The Keeper's Vault      2/2    51s     1    12/12   4
+ 5 Room Service            2/2    56s     3    12/12   2
+ 6 Too Many Cooks          2/2    50s     3    12/12   3
+ 7 The Ballroom Blitz      2/2    43s     3    12/12   3
+ 8 Overture                2/2    37s     3    12/12   3
+ 9 Backstage Pass          1/1    24s     1    12/12   4
+10 The Diva's Fish         2/2    52s     3    12/12   4
+11 Beware of the Biscuit   2/2    43s     3    12/12   2
+12 Sgt. Mutton's Rounds    2/2    50s     3    12/12   4
+13 The Trophy Room         2/2    38s     3    12/12   5
+14 After Hours             2/2    54s     1    12/12   3
+15 Safe Deposit            1/1    46s     1    12/12   4
+16 The Golden Koi          2/2    65s     0     9/12   7
+ALL 16 HEISTS PROVEN UNSEEN (replayed through the real sim: seen=0, heard=0, noise=0, all loot)

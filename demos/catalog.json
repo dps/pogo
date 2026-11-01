@@ -1,0 +1,423 @@
+[
+  {
+    "folder": "platformer",
+    "title": "Puddle Pip",
+    "mapsTo": "Super Mario, 2D platformer",
+    "view": "2d",
+    "tags": [
+      "action",
+      "platformer",
+      "jump",
+      "levels",
+      "boss"
+    ]
+  },
+  {
+    "folder": "tooth",
+    "title": "Hollow Tooth",
+    "mapsTo": "Hollow Knight, Metroid, metroidvania",
+    "view": "2d",
+    "tags": [
+      "action",
+      "exploration",
+      "platformer",
+      "boss",
+      "abilities"
+    ]
+  },
+  {
+    "folder": "brawl",
+    "title": "Lunch Lady Riot",
+    "mapsTo": "Streets of Rage, beat em up",
+    "view": "2d",
+    "tags": [
+      "action",
+      "melee",
+      "combo",
+      "fighting",
+      "crowd"
+    ]
+  },
+  {
+    "folder": "fight",
+    "title": "Kitchen Knockout",
+    "mapsTo": "Street Fighter, versus fighting game",
+    "view": "2d",
+    "tags": [
+      "action",
+      "fighting",
+      "duel",
+      "two-player"
+    ]
+  },
+  {
+    "folder": "shooter",
+    "title": "Gnome Man's Land",
+    "mapsTo": "Doom, first-person shooter, FPS",
+    "view": "3d",
+    "tags": [
+      "action",
+      "shooter",
+      "first-person"
+    ]
+  },
+  {
+    "folder": "horror",
+    "title": "Night Shift at the Doll Factory",
+    "mapsTo": "Five Nights at Freddy's, Slender, horror",
+    "view": "3d",
+    "tags": [
+      "horror",
+      "first-person",
+      "stealth",
+      "tension"
+    ]
+  },
+  {
+    "folder": "twin",
+    "title": "Robovac Rampage",
+    "mapsTo": "Geometry Wars, twin-stick arena shooter",
+    "view": "3d",
+    "tags": [
+      "action",
+      "shooter",
+      "arena",
+      "roguelite"
+    ]
+  },
+  {
+    "folder": "swarm",
+    "title": "Deep Trouble",
+    "mapsTo": "Vampire Survivors, survivor, bullet heaven",
+    "view": "2d",
+    "tags": [
+      "action",
+      "survival",
+      "auto-attack"
+    ]
+  },
+  {
+    "folder": "bullet",
+    "title": "Moth to a Flame",
+    "mapsTo": "Touhou, bullet hell, shmup",
+    "view": "2d",
+    "tags": [
+      "action",
+      "shooter",
+      "dodging",
+      "patterns",
+      "boss"
+    ]
+  },
+  {
+    "folder": "stealth",
+    "title": "Cat Burglar",
+    "mapsTo": "Metal Gear, Mark of the Ninja, stealth",
+    "view": "2d",
+    "tags": [
+      "stealth",
+      "heist",
+      "puzzle"
+    ]
+  },
+  {
+    "folder": "kart",
+    "title": "Shopping Cart GP",
+    "mapsTo": "Mario Kart, kart racer",
+    "view": "3d",
+    "tags": [
+      "racing",
+      "driving",
+      "items"
+    ]
+  },
+  {
+    "folder": "runner",
+    "title": "Ostrich Getaway",
+    "mapsTo": "Subway Surfers, Temple Run, endless runner",
+    "view": "3d",
+    "tags": [
+      "racing",
+      "runner",
+      "reaction",
+      "lanes"
+    ]
+  },
+  {
+    "folder": "plane",
+    "title": "Paper Plane Postman",
+    "mapsTo": "Pilotwings, flight, exploration",
+    "view": "3d",
+    "tags": [
+      "flying",
+      "exploration",
+      "calm",
+      "story"
+    ]
+  },
+  {
+    "folder": "golf",
+    "title": "Crazy Putt Volcano",
+    "mapsTo": "Mini golf, physics sports",
+    "view": "3d",
+    "tags": [
+      "sports",
+      "golf",
+      "physics",
+      "two-player"
+    ]
+  },
+  {
+    "folder": "soccer",
+    "title": "Goat Soccer",
+    "mapsTo": "Sensible Soccer, arcade football, team sports",
+    "view": "3d",
+    "tags": [
+      "sports",
+      "football",
+      "team",
+      "two-player"
+    ]
+  },
+  {
+    "folder": "flock",
+    "title": "BAARK!",
+    "mapsTo": "Pikmin, sheepdog herding, crowd control",
+    "view": "3d",
+    "tags": [
+      "herding",
+      "puzzle",
+      "voxel"
+    ]
+  },
+  {
+    "folder": "tumble",
+    "title": "Tumble Keep",
+    "mapsTo": "Angry Birds, physics destruction",
+    "view": "2d",
+    "tags": [
+      "puzzle",
+      "physics",
+      "destruction",
+      "slingshot"
+    ]
+  },
+  {
+    "folder": "merge",
+    "title": "Hibernook",
+    "mapsTo": "Suika Game, drop and merge",
+    "view": "2d",
+    "tags": [
+      "puzzle",
+      "merge",
+      "physics",
+      "casual"
+    ]
+  },
+  {
+    "folder": "match",
+    "title": "Sugar Crash",
+    "mapsTo": "Candy Crush, Bejeweled, match-3",
+    "view": "2d",
+    "tags": [
+      "puzzle",
+      "match",
+      "casual",
+      "board"
+    ]
+  },
+  {
+    "folder": "blocks",
+    "title": "Stack Attack",
+    "mapsTo": "Tetris, falling blocks",
+    "view": "2d",
+    "tags": [
+      "puzzle",
+      "blocks",
+      "versus",
+      "two-player"
+    ]
+  },
+  {
+    "folder": "snow",
+    "title": "Snowplow",
+    "mapsTo": "Sokoban, logic puzzle",
+    "view": "3d",
+    "tags": [
+      "puzzle",
+      "logic",
+      "block-pushing"
+    ]
+  },
+  {
+    "folder": "escape",
+    "title": "Last Train Home",
+    "mapsTo": "Rusty Lake, The Room, point and click, room escape",
+    "view": "2d",
+    "tags": [
+      "puzzle",
+      "adventure",
+      "story",
+      "escape"
+    ]
+  },
+  {
+    "folder": "chess",
+    "title": "Lamplight",
+    "mapsTo": "Chess, tactile board game",
+    "view": "3d",
+    "tags": [
+      "board",
+      "strategy",
+      "ai",
+      "two-player"
+    ]
+  },
+  {
+    "folder": "tactics",
+    "title": "Squad Goals",
+    "mapsTo": "Into the Breach, XCOM, grid tactics",
+    "view": "3d",
+    "tags": [
+      "strategy",
+      "turn-based",
+      "tactics"
+    ]
+  },
+  {
+    "folder": "crypt",
+    "title": "Crypt Keeper's Day Off",
+    "mapsTo": "Hoplite, Pixel Dungeon, roguelike",
+    "view": "2d",
+    "tags": [
+      "strategy",
+      "roguelike",
+      "turn-based",
+      "dungeon"
+    ]
+  },
+  {
+    "folder": "cards",
+    "title": "Hex & Cards",
+    "mapsTo": "Slay the Spire, deck-builder",
+    "view": "2d",
+    "tags": [
+      "strategy",
+      "cards",
+      "roguelike",
+      "deck"
+    ]
+  },
+  {
+    "folder": "autobattle",
+    "title": "Pet Shop Brawl",
+    "mapsTo": "Super Auto Pets, Teamfight Tactics, auto-battler",
+    "view": "2d",
+    "tags": [
+      "strategy",
+      "auto-battler",
+      "merge"
+    ]
+  },
+  {
+    "folder": "rpg",
+    "title": "Office Quest",
+    "mapsTo": "Pokemon, creature-collecting RPG",
+    "view": "2d",
+    "tags": [
+      "rpg",
+      "story",
+      "creatures",
+      "turn-based"
+    ]
+  },
+  {
+    "folder": "garden",
+    "title": "Gran's Garden Wall",
+    "mapsTo": "Plants vs Zombies, Bloons, tower defense",
+    "view": "2d",
+    "tags": [
+      "strategy",
+      "tower-defense"
+    ]
+  },
+  {
+    "folder": "ants",
+    "title": "Ant Wars",
+    "mapsTo": "Pikmin, StarCraft, real-time strategy, RTS",
+    "view": "2d",
+    "tags": [
+      "strategy",
+      "rts",
+      "swarm"
+    ]
+  },
+  {
+    "folder": "city",
+    "title": "Tiny Tide Town",
+    "mapsTo": "Islanders, Townscaper, city builder",
+    "view": "3d",
+    "tags": [
+      "simulation",
+      "city",
+      "building"
+    ]
+  },
+  {
+    "folder": "farm",
+    "title": "Moonpatch",
+    "mapsTo": "Stardew Valley, farming",
+    "view": "2d",
+    "tags": [
+      "simulation",
+      "farming",
+      "cozy",
+      "story"
+    ]
+  },
+  {
+    "folder": "ramen",
+    "title": "Ramen Rush",
+    "mapsTo": "Diner Dash, Overcooked, cooking, tycoon",
+    "view": "2d",
+    "tags": [
+      "simulation",
+      "cooking",
+      "management",
+      "tycoon"
+    ]
+  },
+  {
+    "folder": "idle",
+    "title": "Cosmic Yard Sale",
+    "mapsTo": "Cookie Clicker, idle clicker",
+    "view": "2d",
+    "tags": [
+      "simulation",
+      "idle",
+      "clicker",
+      "casual"
+    ]
+  },
+  {
+    "folder": "beat",
+    "title": "Beat Goblin",
+    "mapsTo": "Taiko no Tatsujin, Guitar Hero, rhythm",
+    "view": "2d",
+    "tags": [
+      "music",
+      "rhythm"
+    ]
+  },
+  {
+    "folder": "panic",
+    "title": "Five Second Panic",
+    "mapsTo": "WarioWare, party microgames",
+    "view": "2d",
+    "tags": [
+      "party",
+      "casual",
+      "minigames"
+    ]
+  }
+]

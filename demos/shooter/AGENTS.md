@@ -93,7 +93,7 @@ Custom components are functions returning such an object: `const spin = (r) => (
 | `rect(w,h,{color,radius,outline})` `circle(r,{color,outline})` `poly(points,{color})` | Crisp vector shapes |
 | `sprite(name,{width,height,color,frame,flipX})` | Then `e.frame`, `e.flipX`, `e.play([0,1,2],{fps,loop,onDone})` |
 | `text(str,{size,bold,color,font,align,maxWidth,lineHeight})` | `e.text = "new"`; `e.size` stays correct |
-| `mesh(name,{size,color,texture,unlit,shadow})` | 3D: `box sphere plane cylinder cone capsule torus quad`, or voxel models |
+| `mesh(name,{size,color,texture,unlit,shadow,shine})` | 3D: `box sphere plane cylinder cone capsule torus quad`, voxel models, or `assets.lathe`. `shine` 0 to 1 adds gloss. |
 | `billboard(name,{size,frame,color,unlit})` | Sprite in 3D that faces the camera |
 | `collider({shape,size,offset,scale,sensor,ignore})` | `sensor: true` for pickups and hazards. `scale: 0.8` for forgiving hitboxes. |
 | `body({gravity,bounce,friction,drag,mass,maxSpeed})` | Needs collider. `e.vel`, `e.grounded`. Blocks on solids; bodies push each other. |
@@ -111,35 +111,37 @@ s.add s.find(tagOrName) s.first(tagOrName) s.entities s.view s.input s.rng s.ass
 s.wait(sec, fn)  s.every(sec, fn)    // both return { cancel() }
 s.tween(target, { pos: [10, 20], opacity: 0, scale: 2 }, sec, { ease, delay, onDone, yoyo, loop })
 // ease: linear inQuad outQuad inOutQuad outCubic outBack outBounce
-s.onUpdate((dt) => {})  s.onDraw((d) => {})  s.onDrawUI((d) => {})  s.on("resize", fn)  s.emit(name)
+s.onUpdate((dt) => {})  s.onDraw((d) => {})  s.onDrawUI((d) => {})  s.on("resize", fn)  s.on("leave", fn)  s.emit(name)
 s.tilemap(rowsOrString, { size, legend: { "#": [comps], "@": (col, row) => [comps] }, x, y, z, plane: "xy" | "xz" })  // → { entities, width, height }; "." is empty
 s.raycast(from, dir, { max, tag, ignore, dim })  // → { entity, point, normal, dist } | null
 s.overlap(at, { size: [w,h] | radius, tag, dim })  // → Entity[]
 s.pick(x, y, { tag })                 // 3D collider under a view point
 s.burst({ at, count, color: [c1, c2], speed: [a, b], life: [a, b], size: [a, b], gravity, angle, spread, dim })
-s.shake(amount, sec)  s.flash(color, sec)
+s.shake(amount, sec, { haptic: false })  s.flash(color, sec)
+s.freeze(sec)                         // hit-stop: the world holds still, UI and shake keep running. 0.05 to 0.1 makes impacts land. s.isFrozen reads it.
+s.timeScale = 0.3;                    // slow motion; UI runs at full speed
 s.background = ["#fff", "#000"];      // per-scene override
 s.gravity2.set(0, 1400); s.gravity3.set(0, -24, 0);
 s.paused = true;                      // world stops; ui entities and buttons keep working
 ```
 
-In a draw hook, `d` draws in local coordinates: `d.rect(w,h,{x,y,color,radius,outline,opacity}) d.circle(r,{...}) d.line(a,b,{width,color}) d.poly(pts,{color}) d.sprite(name,{x,y,frame,width,height,flipX,color}) d.text(str,{x,y,size,bold,color})`.
+In a draw hook, `d` draws in local coordinates: `d.rect(w,h,{x,y,color,radius,outline,opacity}) d.circle(r,{...}) d.line(a,b,{width,color}) d.poly(pts,{color}) d.sprite(name,{x,y,frame,width,height,flipX,color}) d.text(str,{x,y,size,bold,color})`. `sprite` and `text` take `rot`, and `sprite` takes `crop: [x, y, w, h]` in pixels for atlases with mixed cell sizes. Transforms: `d.push() d.translate(x,y) d.rotate(a) d.scale(x,y) d.pop()`. `d.additive(() => { ... })` draws glows, sparks and lasers that add light. `d.clip(x, y, w, h, () => { ... })` clips to a rectangle in view units, for scrolling panels. For swarms, `const put = d.quads("sheet")`, then `put(x, y, w, h, rot, frame, r, g, b, a)` in a loop, with colors 0 to 1.
 
 **Cameras.** 2D: `s.cam.follow(e,{speed,offset})`, `s.cam.pos`, `.zoom`, `.angle`, `.bounds={x,y,width,height}`, `.toWorld(p)`, `.toView(p)`. Without a camera, world coordinates equal view coordinates. 3D: `s.cam3.set(pos,target)`, `.follow(e,{offset,look,speed})`, `.fov`, `.project(p)`, `.ray(x,y)`. 3D draws first; 2D world and UI draw over it, so HUDs just work.
 
-**Lighting** (3D): `s.light.dir.set(-.5,-1,-.3)`, `s.light.sky = color("#...")`, `.ground`, `.color`, `.shadows`, `.shadowRange`, `.fog = { color: color("#..."), near, far }`.
+**Lighting** (3D): `s.light.dir.set(-.5,-1,-.3)`, `s.light.sky = color("#...")`, `.ground`, `.color`, `.shadows`, `.softShadows` (smoother edges for close-up scenes, costs more per pixel), `.shadowRange`, `.fog = { color: color("#..."), near, far }`.
 
-**Input** (`s.input`): `down(a) pressed(a) released(a)`, `move` (Vec up to length 1, y -1 is up), `pointer` (`x y dx dy down pressed released tapped world`), `touches`, `swipe` (`"left"` etc, for one step), `look` (per-step delta for cameras), `wheel`, `touchMode`.
+**Input** (`s.input`): `down(a) pressed(a) released(a)`, `move` (Vec up to length 1, y -1 is up), `pointer` (`x y dx dy down pressed released tapped world`), `touches` (each with `pressed` on its first step; a second finger also presses buttons), `swipe` (`"left"` etc, for one step), `look` (per-step delta for cameras), `wheel`, `touchMode`.
 
 **Touch per scene**: `game.touch.set({ stick: true, buttons: ["jump"] })` in a scene function, `game.touch.enabled = false` in menus, where a stick would swallow taps. Scripted stick for bots: `game.input.setStick(x, y)`.
 
 **Draw order**: 3D, then 2D world entities by layer, particles, `s.onDraw`, then UI entities by layer, `s.onDrawUI`, touch controls, flash, fade. `d.text` always centres its box on `x`; `align` only aligns lines inside it. Colors above 1 work on `assets.mesh` vertex colors and are multiplied through lighting.
 
-**Custom meshes**: `assets.mesh(name, { positions, indices, normals, uvs, colors })`, with counter-clockwise front faces. Merge static scenery into one mesh for one draw call. `e.mesh = "other"` swaps models, the cheapest animation. `game.renderer.stats` has draw calls and instances. `s.cam3.fovAxis` is `"min"` by default, which widens portrait views; `"vertical"` is classic. Textures clamp at the edges, so to tile art, build a mesh with repeated UV quads.
+**Custom meshes**: `assets.mesh(name, { positions, indices, normals, uvs, colors })`, with counter-clockwise front faces. `assets.lathe(name, [[radius, y], ...], { segments, color })` turns a profile, bottom to top, into chess pieces, cups or wheels; repeat a point for a hard edge. Merge static scenery into one mesh for one draw call. `e.mesh = "other"` swaps models, the cheapest animation. `game.renderer.stats` has draw calls and instances. `s.cam3.fovAxis` is `"min"` by default, which widens portrait views; `"vertical"` is classic. Textures clamp at the edges, so to tile art, build a mesh with repeated UV quads.
 
 **First person**: set `game.mouseLook = true` in the play scene and `false` in menus. On desktop a click then captures the mouse (Esc releases it). Set `touch: { stick: true, look: true, buttons: ["fire"] }` for phones. Both feed `s.input.look`, in CSS pixels per step: `yaw -= look.x * 0.0035; pitch -= look.y * 0.0035`. Drive the camera with `s.cam3.pos.set(...)` and `s.cam3.target.set(...)` each step; that stays interpolated, whereas `s.cam3.set()` is a cut. `s.input.down("fire")` covers keys and the touch button. For the mouse button use `game.pointerLocked && s.input.pointer.down`, because on phones `pointer.down` is also true during look drags. With `s.raycast(from, dir, { dim: 3 })` you have hitscan.
 
-**Game**: `go restart step render state ascii audit screenshot resize sfx music stopMusic vibrate save load on data rng fxRng view input assets audio debug mouseLook pointerLocked`. `?debug` in the URL or F2 outlines colliders. `game.on("hide"|"show"|"scene"|"resize", fn)`.
+**Game**: `go restart step render state ascii audit screenshot resize sfx music stopMusic haptic haptics vibrate save load on data rng fxRng view input assets audio debug mouseLook pointerLocked alpha`. `game.alpha` is how far this frame sits between steps, for smoothing custom draws. `?debug` in the URL or F2 outlines colliders. `game.on("hide"|"show"|"scene"|"resize", fn)`.
 
 ## Art (read this if the game should look good)
 
@@ -161,13 +163,21 @@ Pixmap: `set get rect gradient ellipse circle line poly mirror outline shade spe
 
 Text sprites: `assets.pixels("name", frames, palette?)`, where a frame is an array of rows or one multi-line string, and an array of multi-line strings is several frames. Default palette: `k` black, `w` white, `s d` greys, `r m` reds, `o` orange, `y` yellow, `g e` greens, `c` cyan, `b n` blues, `p` purple, `i` pink, `t` skin, `h u` browns. `.` is empty.
 
-3D models: `assets.voxels("tree", [layer0, layer1, ...], palette?, { unit: 0.1 })`, with layers bottom to top, rows back to front, then `mesh("tree")`. Files: `assets.image(name, url, { cols, rows })`, `assets.sound(name, url)`.
+3D models: `assets.voxels("tree", [layer0, layer1, ...], palette?, { unit: 0.1 })`, with layers bottom to top, rows back to front, then `mesh("tree")`. Files: `assets.image(name, url, { cols, rows })`, `assets.sound(name, url)`. `assets.grid(name, cols, rows)` reads a painted sprite as a multi-row sheet. `assets.refresh(name)` re-uploads changed pixels. `assets.free(name)` releases a mesh or sprite's GPU memory, such as a finished level's track. `assets.wait(promise)` holds `game.start()` for art painted over several frames.
 
 What makes art read as good: a limited palette per game; every character outlined; light from one direction; contact shadows; a background that's lower contrast than the foreground; squash and stretch through `e.scale` tweens.
 
 ## Sound
 
-`game.sfx("click|jump|land|coin|shoot|hit|explode|powerup|lose|win")`, or a tone: `game.sfx({ wave, freq, to, attack, decay, volume })`, or an array of tones with `at`. Waves: `square sine triangle sawtooth noise`. Music: `game.music({ bpm: 120, steps: 2, tracks: [{ wave: "triangle", notes: "C4 E4 G4 - C5 - G4 -", volume: 0.2 }] })`. Audio unlocks on the first gesture, so start music from a button tap. `game.audio.muted` mutes. All tracks in a song should be the same length, because each loops by its own. `game.vibrate` does nothing on iOS.
+`game.sfx("click|jump|land|coin|shoot|hit|explode|powerup|lose|win")`, or a tone: `game.sfx({ wave, freq, to, attack, decay, volume })`, or an array of tones with `at`. Waves: `square sine triangle sawtooth noise`. Music: `game.music({ bpm: 120, steps: 2, tracks: [{ wave: "triangle", notes: "C4 E4 G4 - C5 - G4 -", volume: 0.2 }] })`. Tracks also take `decay` (seconds), `attack`, `slide` (0.5 falls an octave per note, for kicks) and `wave: "noise"` for drums. For sounds that hold and change, such as engines and wind, `const v = game.audio.voice({ wave: "sawtooth", freq: 90, volume: 0.1 })`, then `v.set({ freq, volume })` each step and `v.stop()`; it glides without clicks, and does nothing when audio is blocked. Audio unlocks on the first gesture, so start music from a button tap. `game.audio.muted` mutes. All tracks in a song should be the same length, because each loops by its own. 
+
+**Rhythm.** Never time gameplay from steps. `game.audio.song` gives `{ playing, stalled, time, beat, step, bpm, length }` from the audio hardware, corrected for output latency, as the player hears it. It falls back to the step clock in headless runs and silent embeds, so bots still work. `game.audio.playAt(sound, songTime)` schedules a sound exactly on the beat; call it a little ahead. `game.audio.offset` is the player's calibration in seconds.
+
+## Haptics
+
+On by default, with no code. `button()` and touch controls, `tap()`, preset sounds (`coin` is light, `explode` is heavy, `win` is success) and `s.shake` all pulse. Automatic pulses are spaced out, so rapid fire purrs instead of buzzing. Custom tones are silent to the hand unless you pair them: `game.sfx(tone, { haptic: "medium" })`. Play one directly with `game.haptic("tick|light|medium|heavy|success|warn|error")`, a length in ms, or a pattern `[10, 40, 20]`. Close calls merge, and the stronger wins.
+
+Design for it: **tick** for things picked up or passing a notch, **light** for placing and collecting, **medium** for hits, **heavy** for big impacts, and **success/warn/error** for outcomes. Keep pulses tied to something the player sees and hears at that moment. `game.state().haptics` lists recent pulses, so bots can check them. `game.haptics.enabled = false` is the player's off switch; put one in your settings. `game.haptics.auto = false` or `createGame({ haptics: { auto: false } })` leaves only your own calls. Android phones and gamepads vibrate properly. iPhones have no vibration API, so Pogo uses a Safari 18 trick that gives one strength, and pulses away from a recent touch may not fire.
 
 ## Making it fun on a phone
 

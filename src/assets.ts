@@ -24,6 +24,15 @@ export const PALETTE: Record<string, string> = {
 };
 
 /** A software canvas for painted sprites. It needs no DOM, so painted art also exists in headless runs. */
+/** Painters call this per pixel, and parsing a hex string each time dominates detailed art. */
+const inks = new Map<string, Color>();
+const ink = (c: ColorLike) => {
+    if (typeof c !== "string") return color(c);
+    let v = inks.get(c);
+    if (!v) inks.set(c, (v = color(c)));
+    return v;
+};
+
 export class Pixmap {
     readonly data: Uint8Array;
     private x0 = 0;
@@ -36,7 +45,7 @@ export class Pixmap {
     set(x: number, y: number, c: ColorLike, coverage = 1) {
         x = Math.floor(x); y = Math.floor(y);
         if (x < 0 || y < 0 || x >= this.width || y >= this.height) return this;
-        const col = color(c), a = col.a * coverage, o = this.index(x, y), d = this.data, da = d[o + 3] / 255, out = a + da * (1 - a);
+        const col = ink(c), a = col.a * coverage, o = this.index(x, y), d = this.data, da = d[o + 3] / 255, out = a + da * (1 - a);
         if (out <= 0) return this;
         d[o] = (col.r * 255 * a + d[o] * da * (1 - a)) / out;
         d[o + 1] = (col.g * 255 * a + d[o + 1] * da * (1 - a)) / out;
@@ -55,13 +64,13 @@ export class Pixmap {
     }
     /** Vertical gradient, top to bottom. */
     gradient(x: number, y: number, w: number, h: number, top: ColorLike, bottom: ColorLike) {
-        const a = color(top);
+        const a = ink(top);
         for (let j = 0; j < h; j++) { const c = a.lerp(bottom, h > 1 ? j / (h - 1) : 0); for (let i = 0; i < w; i++) this.set(x + i, y + j, c); }
         return this;
     }
     /** Filled, anti-aliased ellipse. An optional bottom color gives it a gradient. */
     ellipse(cx: number, cy: number, rx: number, ry: number, c: ColorLike, bottom?: ColorLike) {
-        const col = color(c);
+        const col = ink(c);
         for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
             const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry, d = Math.hypot(dx, dy);
             const cover = Math.max(0, Math.min(1, (1 - d) * Math.min(rx, ry) + 0.5));
@@ -108,7 +117,7 @@ export class Pixmap {
     }
     /** A 1px outline around everything painted so far. The biggest single upgrade to sprite readability. */
     outline(c: ColorLike = "#1f2430") {
-        const col = color(c), before = this.data.slice(), alpha = (x: number, y: number) => (x < 0 || y < 0 || x >= this.width || y >= this.height ? 0 : before[this.index(x, y) + 3] / 255);
+        const col = ink(c), before = this.data.slice(), alpha = (x: number, y: number) => (x < 0 || y < 0 || x >= this.width || y >= this.height ? 0 : before[this.index(x, y) + 3] / 255);
         for (let y = 0; y < this.height; y++) for (let x = 0; x < this.width; x++) {
             // Composited behind each pixel by neighbour coverage, so anti-aliased edges stay smooth.
             const a0 = alpha(x, y), cover = Math.max(alpha(x - 1, y), alpha(x + 1, y), alpha(x, y - 1), alpha(x, y + 1)) * col.a;
@@ -258,10 +267,60 @@ export class Assets {
         return this;
     }
 
+    /** Release a mesh or sprite's GPU memory when it's no longer used, such as a level's track. It can be defined again afterwards. */
+    free(name: string) {
+        const g = this.geoms.get(name), a = this.sprites.get(name);
+        if (g) { this.game.renderer.freeGeometry(g); this.geoms.delete(name); }
+        if (a) { this.game.renderer.freeTexture(a); this.sprites.delete(name); }
+    }
+    /** Upload a sprite again after changing its data, reusing the texture. */
+    refresh(name: string) { this.game.renderer.refresh(this.sprite(name)); }
+    /** Read a painted sprite as a grid of frames, for sheets with several rows. */
+    grid(name: string, cols: number, rows: number) {
+        const a = this.sprite(name);
+        a.cols = cols; a.rows = rows; a.frameW = a.width / cols; a.frameH = a.height / rows;
+        return this;
+    }
+    /** Hold game.start() until this finishes, for art painted over several frames. */
+    wait(work: Promise<unknown>) { this.pending.push(work); return this; }
+
     sprite(name: string): SpriteAsset {
         const a = this.sprites.get(name);
         if (!a) throw new PogoError("UNKNOWN_SPRITE", `No sprite named "${name}".`, `${suggest(name, this.sprites.keys())} Define sprites with game.assets.pixels() or .image() before game.start().`);
         return a;
+    }
+
+    /**
+     * A turned shape from a profile of [radius, height] points, bottom to top: chess pieces, cups, wheels, bottles.
+     * Repeat a point to get a hard edge there.
+     */
+    lathe(name: string, profile: [number, number][], o: { segments?: number; color?: ColorLike } = {}) {
+        const n = o.segments ?? 24, rings = profile.length, c = color(o.color ?? "#ffffff");
+        // Everything in Pogo is centred on pos, so an entity's pos.y is half its height above the ground.
+        const heights = profile.map((p) => p[1]), mid = (Math.min(...heights) + Math.max(...heights)) / 2;
+        const positions: number[] = [], normals: number[] = [], uvs: number[] = [], colors: number[] = [], indices: number[] = [];
+        const dir = (i: number) => {
+            const p = profile[i], q = profile[i + 1], dx = q ? q[0] - p[0] : 0, dy = q ? q[1] - p[1] : 0, len = Math.hypot(dx, dy);
+            return len ? [dx / len, dy / len] : null;
+        };
+        for (let i = 0; i < rings; i++) {
+            // A repeated point has no direction on one side, so each copy keeps its own normal and the edge stays hard.
+            const before = i > 0 ? dir(i - 1) : null, after = dir(i);
+            const t = before && after ? [before[0] + after[0], before[1] + after[1]] : before ?? after ?? [0, 1];
+            const len = Math.hypot(t[0], t[1]) || 1, nr = t[1] / len, ny = -t[0] / len;
+            for (let j = 0; j <= n; j++) {
+                const a = (j / n) * Math.PI * 2, x = Math.cos(a), z = Math.sin(a);
+                positions.push(x * profile[i][0], profile[i][1] - mid, z * profile[i][0]);
+                normals.push(x * nr, ny, z * nr);
+                uvs.push(j / n, i / (rings - 1));
+                colors.push(c.r, c.g, c.b);
+            }
+        }
+        for (let i = 0; i < rings - 1; i++) for (let j = 0; j < n; j++) {
+            const p = i * (n + 1) + j, q = p + n + 1;
+            indices.push(p, q, q + 1, p, q + 1, p + 1);
+        }
+        return this.mesh(name, { positions, normals, uvs, colors, indices });
     }
 
     geometry(name: string): Geometry {

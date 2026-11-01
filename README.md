@@ -34,12 +34,13 @@ game.start("title");
 
 ```sh
 npm install && npm run build
-node bin/pogo.js new mygame        # pogo.js, game.js, index.html, AGENTS.md
-node bin/pogo.js check mygame/game.js
-node bin/pogo.js serve mygame
+node bin/pogo.js list racing                  # find the closest game
+node bin/pogo.js new games/mine --from kart   # fork it, or omit --from for a blank game
+node bin/pogo.js check games/mine/game.js
+node bin/pogo.js serve games/mine
 ```
 
-A game needs only `pogo.js`; there's no build step. [AGENTS.md](AGENTS.md) is the full reference, and it's copied into every new game.
+A game needs only `pogo.js`; there's no build step. **Coding agents should start with [AGENTS.md](AGENTS.md)**, which picks the best game to fork and explains how to change it. [docs/API.md](docs/API.md) is the full reference, and it's copied into every new game as `AGENTS.md`.
 
 ## Repo
 
@@ -48,7 +49,8 @@ A game needs only `pogo.js`; there's no build step. [AGENTS.md](AGENTS.md) is th
 | `src/` | The framework, in TypeScript |
 | `bin/pogo.js` | CLI: `new`, `check`, `shot`, `serve` |
 | `examples/` | Small reference games: Hopper (2D) and Lane Blast (3D) |
-| `demos/` | Five full games, with a launcher at `demos/index.html` |
+| `demos/` | A full game for each major genre, with a launcher at `demos/index.html` and `demos/catalog.json` |
+| `docs/` | The API reference |
 | `tests/` | Headless tests (`npm test`), Chrome tests (`npm run test:browser`) |
 | `template/` | What `pogo new` copies |
 
