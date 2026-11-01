@@ -55,3 +55,7 @@ A game needs only `pogo.js`; there's no build step. **Coding agents should start
 | `template/` | What `pogo new` copies |
 
 `npm run test:browser` needs Google Chrome installed, or `CHROME_PATH`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

@@ -9,7 +9,7 @@
   "types": "./dist/pogo.d.ts",
   "exports": { ".": { "types": "./dist/pogo.d.ts", "default": "./dist/pogo.js" } },
   "bin": { "pogo": "./bin/pogo.js" },
-  "files": ["dist/", "bin/", "template/", "docs/", "demos/", "AGENTS.md", "README.md"],
+  "files": ["dist/", "bin/", "template/", "docs/", "demos/", "AGENTS.md", "README.md", "LICENSE"],
   "scripts": {
     "build": "node scripts/build.js",
     "typecheck": "tsc --noEmit",

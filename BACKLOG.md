@@ -3,6 +3,9 @@
 Requests from the five demo builds that are not done yet, most valuable first. Each one came from an agent working around the framework in its own game.
 
 ## Rendering
+- A public instanced mesh API with raw matrices, in-place mesh updates, and partial texture refresh. Several games call internals for these.
+- Tiling and scrolling UVs on 3D meshes, and soft-alpha billboards.
+- A clip that follows transforms and shake.
 - An interpolated `s.cam.viewRect`, and an atlas packer for painted art of mixed sizes.
 - Multiply blending or render-to-texture for ambient light, per-mesh additive blending, a transparency sort override, and mirrored meshes.
 - Mesh culling, plus per-vertex alpha in `d.tris`.
@@ -22,6 +25,11 @@ Requests from the five demo builds that are not done yet, most valuable first. E
 - 2D camera dead zone and look-ahead, and a `cam3.firstPerson()` helper.
 
 ## Input and UI
+- A second virtual stick, and sliding a thumb between touch buttons.
+- A public press-start position on `pointer`, a tap-or-drag helper, a pinch helper, and swipes that fire mid-gesture.
+- `button()` fonts, icons and mutable labels. Six builders asked for this.
+- Immediate-mode UI that the audit can see.
+- `Vec.set(v)` sets x only, which surprises people using `scale.set(v)`.
 - A custom touch pad API for two-player and fighting layouts, and shoulder bindings for pads.
 - A UI layer above `onDrawUI`, and particles that can draw above `s.onDraw`.
 - Rich text with inline icons.
@@ -30,12 +38,14 @@ Requests from the five demo builds that are not done yet, most valuable first. E
 - Layer options on `onDraw`/`onDrawUI`, a UI tween clock that runs while paused, and `button` styling.
 
 ## Audio
+- Stereo pan on `voice` and `sfx`, for spatial sound.
 - Song seek and pause, per-track gain, and letting note tails ring out after `stopMusic`.
 - Per-note length and decay, crossfades and bar-synced song changes, and tempo control. Warn on tracks of unequal length.
 - `game.sfx(tone, { name })`, so `state()` can tell custom sounds apart.
 - Offline render to WAV with a level report, because agents can't hear anything they write.
 
 ## Tools
+- Run draw hooks in headless steps, or warn about layout done in draw. Bots miss it otherwise.
 - A resumable background job helper for AI searches when Workers are blocked.
 - A game-supplied bot hook for `pogo check`. Its random player tends to reach menus and little else, even with `--scene`.
 - A layout audit that sees `d.text` and `d.sprite` drawn in hooks, and per-action reachability checks.

@@ -197,7 +197,7 @@ Most newer games keep rules in a headless `sim.js` or `engine.js` with no drawin
 
 **`kart`, Shopping Cart GP.** Best for anything that races: boats, bikes, horses. Tracks are short spline lists in `tracks.js`, racers and classes in `data.js`, scenery in `scenery.js` (`THEMES`) and items in `world.js` (`ITEM_TABLE`). Handling is in `kart.js`, so change that last. Run `tools/trackcheck.mjs` after editing a track.
 
-**`runner`, Ostrich Getaway.** Best for endless reaction games. Change the character, chunks and biomes, and let the bot prove new chunks are passable at top speed.
+**`runner`, Ostrich Getaway.** Best for endless reaction games. Biomes, disguises, unlockable characters and missions are in `data.js` (`BIOMES`, `DISGUISES`, `OSTRICHES`, `MISSIONS`), road patterns in `chunks.js` (`CHUNKS`), and movement in `sim.js`. The character rig is in `rig.js`. After editing a chunk, run `tools/passable.mjs`, which proves every chunk and pair can be passed at top speed, then `tools/curve.mjs` for difficulty.
 
 **`plane`, Paper Plane Postman.** Best for calm exploration with free movement. Letters, people, planes, stamps and trials are in `data.js`. The town is in `town.js`, and the handling in `flight.js`. It's the heaviest renderer here, so remove detail before adding it. Run `tools/reach.mjs`.
 
@@ -219,7 +219,7 @@ Most newer games keep rules in a headless `sim.js` or `engine.js` with no drawin
 
 **`snow`, Snowplow.** Best for push-block and logic puzzles. Mechanics are in `rules.js`, and level sections in `puzzles.js` and `levels.js`. `tools/check.mjs` solves every level and proves its idea is needed. Update `solutions.js` when levels change.
 
-**`escape`, Last Train Home.** Best for story-led puzzles and point-and-click. See the folder's own notes once finished.
+**`escape`, Last Train Home.** Best for story-led puzzles and point-and-click. Carriages, puzzles, items and documents are in `story.js` (`CARRIAGES`, `PUZZLES`, `ITEMS`, `DOCS`), scenes in `scenes.js`, and tactile dials and latches in `widgets.js`. Puzzle logic is in `rules.js`. After any puzzle change, run `tools/stuck.mjs`, which searches every state for dead ends, then `tools/play.mjs` and `tools/monkey.mjs`.
 
 ### Strategy
 
@@ -227,19 +227,19 @@ Most newer games keep rules in a headless `sim.js` or `engine.js` with no drawin
 
 **`tactics`, Squad Goals.** Best for small turn-based battles. Battles are in `missions.js`, and classes and enemies in `data.js`. Rules are deterministic in `sim.js`. Run `tools/solveall.mjs` after any change, since each mission is meant to be solvable without luck.
 
-**`crypt`, Crypt Keeper's Day Off.** Best for quick turn-based dungeon runs. See the folder's own notes once finished.
+**`crypt`, Crypt Keeper's Day Off.** Best for quick turn-based dungeon runs. Keepers, monsters, relics and postcards are in `data.js`, floors and dungeons in `floors.js` (`DUNGEONS`, `ITINERARY`), and rules in `sim.js`. Relics can break the guarantee that floors are winnable, so run `tools/bot.mjs` after adding one, plus `tools/rules-test.mjs` and `tools/ramp.mjs`.
 
 **`cards`, Hex & Cards.** Best for deck, hand and combo games. Content is in `data/`: `cards.js`, `enemies.js`, `events.js`, `trinkets.js`, with reactions in `rules.js`. Rules are in `sim.js`, and card art in `art/`. Keep runs seeded. Run `tools/test.mjs`, then `tools/balance.mjs` to find broken or dead cards.
 
-**`autobattle`, Pet Shop Brawl.** Best for build-a-team games. See the folder's own notes once finished.
+**`autobattle`, Pet Shop Brawl.** Best for build-a-team games. Pets, traits and shops are in `data.js` (`TRAITS`, `SHOPS`), pet art in `art-pets.js`, round economy in `run.js` (`ODDS`, `TUNE`), and fights in `battle.js` and `sim.js`. Opponent teams in `ghosts.js` come from `tools/gen-ghosts.mjs`, so regenerate them after changing pets. Run `tools/balance.mjs`, which reports any dominant or dead trait.
 
-**`rpg`, Office Quest.** Best for story RPGs and creature collecting. See the folder's own notes once finished.
+**`rpg`, Office Quest.** Best for story RPGs and creature collecting. Types, moves, status effects and items are in `data.js` (`TYPES`, `MOVES`, `STATUS`, `ITEMS`), creatures and their art in `beasts.js`, floors and quests in `story.js` and `story2.js` (`FLOORS`, `QUESTS`), and battle rules in `sim.js`. Run `tools/bot.mjs` from a fresh save, and `tools/balance.mjs` to find walls and useless creatures.
 
 **`garden`, Gran's Garden Wall.** Best for placing defenses. Defenders, pests, bosses, seasons, levels and the upgrade tree are in `data.js`. Rules are in `sim.js`. Run `tools/mapcheck.mjs`, `tools/campaign.mjs` and `tools/endless.mjs`.
 
 **`ants`, Ant Wars.** Best for large armies with simple commands. Castes, food and chambers are in `data.js`, missions in `story.js`, maps in `maps.js`, and AI in `ai.js` (`STRATEGIES`). Run `tools/campaign.mjs` and `tools/ladder.mjs`.
 
-**`city`, Tiny Tide Town.** Best for placement puzzles with neighbour bonuses. See the folder's own notes once finished.
+**`city`, Tiny Tide Town.** Best for placement puzzles with neighbour bonuses. Buildings, adjacency scores, prices and scenarios are in `data.js` (`BUILDINGS`, `ADJ`, `PRICE`, `SCENARIOS`). Tides, storms and supply rules are in `sim.js`, and models in `models.js`. Run `tools/mapcheck.mjs`, `tools/bot.mjs` and `tools/softlock.mjs`. It sits above the draw call guide at 132, so remove detail before adding it.
 
 ### Life, management and music
 
@@ -247,7 +247,7 @@ Most newer games keep rules in a headless `sim.js` or `engine.js` with no drawin
 
 **`ramen`, Ramen Rush.** Best for order-rush games. Recipes, toppings, locations, staff, regulars and shifts are in `data.js`, and timing is in `sim.js` (`TUNE`). The cooking actions are in `stage.js`. To make a coffee shop or bakery, replace the steps and art. Run `tools/bot.mjs`.
 
-**`idle`, Cosmic Yard Sale.** Best for number-go-up games. See the folder's own notes once finished.
+**`idle`, Cosmic Yard Sale.** Best for number-go-up games. Acts, customers and bylaws are in `data.js` (`ACTS`, `CUSTOMERS`, `BYLAWS`), and the economy is in `econ.js` (`TUNE`, `MILESTONES`). Art is in `art.js`, and the zoomed scales in `world.js`. After any economy change, run `tools/sim.mjs`, which checks pacing across player types, then `tools/bot.mjs`.
 
 **`beat`, Beat Goblin.** Best for anything timed to music. Songs are in `music/songs.js`, charts in `charts.js` (`CHARTS`), the tour in `story.js`, and hit windows in `engine.js` (`WINDOWS`). Never time gameplay from steps. Run `tools/verify-songs.mjs` and `tools/verify-charts.mjs`.
 
