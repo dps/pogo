@@ -75,12 +75,15 @@ export class Game {
     letterbox: Color;
     /** @internal */
     _alpha = 1;
+    /** @internal Record drawn text in real browsers too, for pogo shot --audit. */
+    _recordText = false;
     /** How far the current frame sits between the last two steps, 0 to 1, for smoothing custom draws. */
     get alpha() { return this._alpha; }
     private _mouseLook = false;
 
     private scenes = new Map<string, SceneFn>();
-    private draw: Draw;
+    /** @internal */
+    draw: Draw;
     private screen: ScreenInfo;
     private canvas: HTMLCanvasElement | null = null;
     private currentArgs: any;
@@ -259,6 +262,7 @@ export class Game {
         const s = this.current;
         if (!s) return;
         this._alpha = alpha;
+        this.draw.texts = this.headless || this._recordText ? [] : null;
         s._render(alpha, this.draw);
         const f = this.fade;
         if (f.phase) {

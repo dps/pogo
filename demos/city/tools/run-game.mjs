@@ -4,6 +4,7 @@ import { SCENARIOS } from "../data.js";
 import { act } from "../policy.js";
 const game = globalThis.__pogo;
 let fail = 0;
+game.save("tide1", { stars: {}, best: {}, relaxed: false, sound: true, music: true, haptics: true, taught: true });
 const ok = (c, m) => { console.log(`${c ? "ok  " : "FAIL"} ${m}`); if (!c) fail++; };
 
 for (let i = 0; i < SCENARIOS.length; i++) {
@@ -30,7 +31,7 @@ ok(Object.keys(saved.stars).length === SCENARIOS.length, `progress saved: ${JSON
 
 // By touch only: first scenario with tap on card, tap Plonk.
 {
-    game.save("tide1", { stars: {}, best: {}, relaxed: false, sound: true, music: true, haptics: true });
+    game.save("tide1", { stars: {}, best: {}, relaxed: false, sound: true, music: true, haptics: true, taught: true });
     game.go("play", { index: 0 });
     game.step(40);
     const { sim, hud } = game.city;
@@ -70,5 +71,35 @@ ok(Object.keys(saved.stars).length === SCENARIOS.length, `progress saved: ${JSON
     for (let k = 1; k <= 6; k++) { I.pointerEvent("move", 5, 120 + k * 16, 300); game.step(2); }
     I.pointerEvent("up", 5, 216, 300); game.step(10);
     ok(game.city.w.cam.tYaw !== y0, "drag spins the island");
+}
+// The guided first game, by touch only, in the order a stranger would be told.
+{
+    game.save("tide1", { stars: {}, best: {}, relaxed: false, sound: true, music: true, haptics: true });
+    game.go("play", { index: 0 });
+    game.step(40);
+    const { sim, hud, coach } = game.city;
+    ok(!!coach && hud.cards.length === 1, `lesson opens with one card: ${hud.cards}`);
+    const seen = [];
+    let steps = 0, t0 = sim.t;
+    while (!coach.done && steps < 60 * 150) {
+        const c = hud.coach;
+        if (c && seen[seen.length - 1] !== c.text) seen.push(c.text);
+        const t = c?.target;
+        hud.layout();
+        if (t?.card) { const r = hud.cardRect(hud.cards.indexOf(t.card)); game.input.tap(r.x, r.y); }
+        else if (t?.btn) { const b = hud.btn(t.btn); game.input.tap(b.x, b.y); }
+        else if (t?.tile !== undefined && t.tile !== null && hud.sel) { const q = sim.cells[t.tile], p = game.current.cam3.project([q.x, game.city.w.surface(q) + 0.1, q.z]); game.input.tap(p.x, p.y); }
+        game.step(20); steps += 20;
+    }
+    console.log(seen.map((x) => `     ${x}`).join("\n"));
+    ok(coach.done, `lesson finished by touch in ${(steps / 60).toFixed(0)} s of play, ${sim.t - t0} sim hours`);
+    ok(sim.count("cottage") === 2 && sim.count("market") === 1 && sim.count("wood") === 1 && sim.buildings.every((b) => b.connected), "lesson left a linked town of 2 cottages, market, woodcutter");
+    ok(hud.cards.length === sim.scn.unlocks.length && hud.allow === null, "all cards open afterwards");
+    ok(game.load("tide1", {}).taught === true, "lesson remembered");
+    game.step(60);
+    ok(!!hud.next, `next-action hint: ${hud.next?.text}`);
+    let g = 0; hud.speed = 4;
+    while (!hud.modal && g++ < 4000) { game.step(30); if (sim.hour % 3 === 0) { let k = 8; while (k-- && act(sim)); } hud.layout(); }
+    ok(!!hud.modal, `scenario still wins after the lesson, day ${sim.finishedDay}`);
 }
 process.exit(fail ? 1 : 0);

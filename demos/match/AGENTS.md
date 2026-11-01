@@ -15,7 +15,7 @@ pogo serve .                  # http://localhost:5173 for a human
 
 `--eval` runs in the page with `game` defined, before stepping. `--print "game.renderer.stats"` logs a value after stepping, and `--dpr 3` matches a real 3x phone. Pages opened with `?paused` don't auto-run, so tools drive them with `game.step()`.
 
-`pogo check` only sees what its random player reaches, which may just be your menus. Always also run it on real gameplay, `pogo check game.js --scene play --args '{"level":3}'`, and write your own bot for anything that matters. Its layout audit can't see what you draw in `onDraw`/`onDrawUI`. `pogo shot` uses software GL: it shows you what renders, not how fast. In headless Node, or Node tests, importing `game.js` gives you the game at `globalThis.__pogo`:
+`pogo check` only sees what its random player reaches, which may just be your menus. Always also run it on real gameplay, `pogo check game.js --scene play --args '{"level":3}'`, and write your own bot for anything that matters. Its layout audit reads text from draw hooks too, but headless widths are estimates, and it can't see non-text art, so add `--audit` to `pogo shot` for real metrics and look at the picture. `pogo shot` uses software GL: it shows you what renders, not how fast. In headless Node, or Node tests, importing `game.js` gives you the game at `globalThis.__pogo`:
 
 ```js
 import "./game.js";
@@ -145,7 +145,7 @@ In a draw hook, `d` draws in local coordinates: `d.rect(w,h,{x,y,color,radius,ou
 
 ## Art (read this if the game should look good)
 
-Define art in `game.js`, before `game.start()`. There are no files to manage. Text sprites are good for tiny icons. For anything the player looks at, **paint** it.
+If you have an image generator, use it for 2D art the player looks at, following "Using image generation" in the repo's root `AGENTS.md`. Otherwise define art in code before `game.start()`. Text sprites are good for tiny icons. For anything the player looks at, **paint** it.
 
 ```js
 game.assets.paint("slime", 96, 96, (p, frame) => {
@@ -163,7 +163,7 @@ Pixmap: `set get rect gradient ellipse circle line poly mirror outline shade spe
 
 Text sprites: `assets.pixels("name", frames, palette?)`, where a frame is an array of rows or one multi-line string, and an array of multi-line strings is several frames. Default palette: `k` black, `w` white, `s d` greys, `r m` reds, `o` orange, `y` yellow, `g e` greens, `c` cyan, `b n` blues, `p` purple, `i` pink, `t` skin, `h u` browns. `.` is empty.
 
-3D models: `assets.voxels("tree", [layer0, layer1, ...], palette?, { unit: 0.1 })`, with layers bottom to top, rows back to front, then `mesh("tree")`. Files: `assets.image(name, url, { cols, rows })`, `assets.sound(name, url)`. `assets.grid(name, cols, rows)` reads a painted sprite as a multi-row sheet. `assets.refresh(name)` re-uploads changed pixels. `assets.free(name)` releases a mesh or sprite's GPU memory, such as a finished level's track. `assets.wait(promise)` holds `game.start()` for art painted over several frames.
+3D models: `assets.voxels("tree", [layer0, layer1, ...], palette?, { unit: 0.1 })`, with layers bottom to top, rows back to front, then `mesh("tree")`. Files: `assets.image(name, url, { cols, rows })`, `assets.sound(name, url)`. `url` can be a data URL, which is what `pogo art --out art.js` makes from a generated image: see "Using image generation" in the repo's root `AGENTS.md`. `assets.grid(name, cols, rows)` reads a painted sprite as a multi-row sheet. `assets.refresh(name)` re-uploads changed pixels. `assets.free(name)` releases a mesh or sprite's GPU memory, such as a finished level's track. `assets.wait(promise)` holds `game.start()` for art painted over several frames.
 
 What makes art read as good: a limited palette per game; every character outlined; light from one direction; contact shadows; a background that's lower contrast than the foreground; squash and stretch through `e.scale` tweens.
 
@@ -194,7 +194,7 @@ Errors are `PogoError` with a code and a hint, such as `[UNKNOWN_SPRITE] ... Did
 
 Embeds can block gamepads, storage, audio, vibration and pointer lock. Pogo turns each one off quietly and the game keeps running. If `mouseLook` can't capture the mouse, `input.touchMode` turns on and the mouse drives the touch controls, so a first-person game needs `touch.look` to stay playable there.
 
-Audit codes: `OFFSCREEN_UI`, `SAFE_AREA`, `UNREACHABLE_ACTION` fail the check; `TEXT_TOO_SMALL`, `TAP_TARGET_SMALL`, `UI_OVERLAP`, `COVERS_CONTROLS` warn. Headless text widths are estimates, so confirm tight text in `pogo shot`.
+Audit codes: `OFFSCREEN_UI`, `SAFE_AREA`, `UNREACHABLE_ACTION` fail the check; `TEXT_OVERLAP`, `TEXT_CUT_OFF`, `TEXT_TOO_SMALL`, `TAP_TARGET_SMALL`, `UI_OVERLAP`, `COVERS_CONTROLS` warn. Treat `TEXT_OVERLAP` as a bug: it's the most common fault players report. Confirm tight text with `pogo shot --audit`.
 
 ## Not included
 

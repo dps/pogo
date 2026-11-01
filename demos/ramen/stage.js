@@ -78,7 +78,7 @@ export class Stage {
             L.seatY = L.counter + 4;
             L.bustH = Math.min(128, 108 + hTall * 0.1) * sc;
             L.ticketW = Math.min(106 * sc, (W - 10) / seats - 5);
-            L.pdx = 0; L.tdx = 0; L.tickY = safe.top + 64;
+            L.pdx = 0; L.tdx = 0; L.tickY = safe.top + 64; L.ticketH = Math.min(54, L.ticketW * 0.62 + 4);
             const r = [72, 62, 52][nb - 1] * Math.min(1.2, sc) * (1 + Math.min(0.1, hTall / 900));
             const by = L.counter + 16 + r * 0.82 + hTall * 0.14;
             L.bowls = k.bowls.map((_, i) => ({ x: W / 2 + (i - (nb - 1) / 2) * Math.min((W - 24) / nb, r * 2.5), y: by, r }));
@@ -96,12 +96,12 @@ export class Stage {
             L.seatY = L.counter + 3; L.bustH = L.counter - safe.top - 42;
             const cell = (W - safe.left - safe.right) / seats;
             L.ticketW = Math.min(88, cell * 0.47);
-            L.pdx = -cell * 0.21; L.tdx = cell * 0.26; L.tickY = Math.max(safe.top + 46, L.counter - L.ticketW * 0.82 - 10);
-            const binH = Math.min(74, H * 0.19), binW = Math.min(92, (W * 0.62) / nt), binY = H - safe.bottom - binH / 2 - 5;
+            L.pdx = -cell * 0.21; L.tdx = cell * 0.26; L.ticketH = Math.max(46, L.ticketW * 0.66); L.tickY = Math.max(safe.top + 62, L.counter - L.ticketH - 22);
+            const binH = Math.min(74, H * 0.19), binW = Math.min(92, 60 * Math.max(nt, 4) / nt, (W * 0.56) / nt), binY = H - safe.bottom - binH / 2 - 5;
             L.bins = k.bins.map((_, i) => ({ x: W / 2 + (i - (nt - 1) / 2) * binW, y: binY, w: binW - 4, h: binH }));
             const room = binY - binH / 2 - L.counter, r = Math.min(room * 0.56, [62, 56, 48][nb - 1]), by = L.counter + 8 + r * 0.8;
             L.bowls = k.bowls.map((_, i) => ({ x: W / 2 + (i - (nb - 1) / 2) * (r * 2.3), y: by, r }));
-            const pw = Math.min(64, (W / 2 - nb * r * 1.2 - safe.left - 10) / 3 - 2), py = L.counter + room * 0.56;
+            const pw = Math.min(64, (W / 2 - nb * r * 1.2 - safe.left - 10) / 3 - 2), py = L.counter + Math.max(36, room * 0.4);
             const left = safe.left + 8 + pw / 2, right = W - safe.right - 8 - pw / 2;
             L.pots = k.pots.map((_, i) => { const p = i * (pw + 3); return { x: flip ? right - p : left + p, y: py, w: pw }; });
             L.broths = k.brothList.map((_, i) => { const p = i * (pw + 3); return { x: flip ? left + p : right - p, y: py, w: pw }; });
@@ -246,8 +246,50 @@ export class Stage {
         this.animate(dt);
     }
 
-    float(x, y, text, o = {}) { this.floats.push({ x, y, text, t: 0, life: o.life ?? 1.1, color: o.color ?? CREAM, size: o.size ?? 17, big: !!o.big }); }
-    bowlPos(i) { return this.L.bowls[i]; }
+    /** Boxes that floating text must stay clear of. */
+    textBoxes(skip) {
+        const { L, k } = this, { safe, W } = L, out = [];
+        const px = safe.left + 10, y = safe.top + 22, B = (x0, y0, x1, y1) => out.push({ x0, y0, x1, y1 });
+        B(px, y - 15, px + 96, y + 15); B(px, y + 16, px + 120, y + 37); B(W / 2 - 110, y - 10, W / 2 + 150, y + 10); B(W - safe.right - 56, y - 22, W - safe.right, y + 24);
+        for (let i = 0; i < k.seats.length; i++) out.push(this.ticketBox({ seat: i, party: 1 }));     // Reserved even when empty: the next order lands here.
+        for (const P of L.broths) B(P.x - P.w * 0.45, P.y + P.w * 0.42, P.x + P.w * 0.45, P.y + P.w * 0.6);
+        if (this.bubbleBox && this.bubble) out.push(this.bubbleBox);
+        if (this.hintBox) out.push(this.hintBox);
+        if (this.banner) B(L.land ? W / 2 - 100 : 0, L.counter - 8, L.land ? W / 2 + 100 : W, L.counter + 40);
+        for (const f of this.floats) if (f !== skip) out.push(f.box);
+        return out;
+    }
+
+    /** Feedback text. One message per place (`key`), moved aside so it never lands on other words. */
+    float(x, y, text, o = {}) {
+        const { L } = this, size = o.size ?? 17, sub = o.sub ?? null, life = o.life ?? 1.1, rise = 12;
+        if (o.key) this.floats = this.floats.filter((f) => f.key !== o.key);
+        const style = { size, font: FONT, bold: true, align: "center", maxWidth: 0, lineHeight: 1.25 }, m = this.game.renderer.measureText(text, style);
+        const sw = sub ? this.game.renderer.measureText(sub, { ...style, size: 14 }).width : 0, w = Math.max(m.width, sw) + 10, h = size * 1.25 + (sub ? 18 : 0);
+        let cx = clamp(x, L.safe.left + w / 2 + 3, L.W - L.safe.right - w / 2 - 3);
+        const others = this.textBoxes();
+        if (L.land && this.banner && Math.abs(cx - L.W / 2) < 100 + w / 2 && o.key?.[0] === "s") cx = L.W / 2 + (x < L.W / 2 ? -1 : 1) * (102 + w / 2);
+        const at = (cy) => ({ x0: cx - w / 2, x1: cx + w / 2, y0: cy - h / 2 - rise, y1: cy + h / 2 });
+        const hit = (a) => others.some((b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0);
+        let cy = y, found = false;
+        for (const off of [0, -1, 1, -2, 2]) { const q = y + off * (h * 0.5 + 6); if (q > L.safe.top + 8 && q < L.H - 10 && !hit(at(q))) { cy = q; found = true; break; } }
+        if (!found) { const a = at(y), B = this.bubbleBox; if (this.bubble && a.x0 < B.x1 && a.x1 > B.x0 && a.y0 < B.y1 && a.y1 > B.y0) this.bubble = null; this.floats = this.floats.filter((f) => !(a.x0 < f.box.x1 && a.x1 > f.box.x0 && a.y0 < f.box.y1 && a.y1 > f.box.y0)); }     // Newest news wins.
+        this.floats.push({ x: cx, y: cy, text, sub, t: 0, life, color: o.color ?? CREAM, size, big: !!o.big, key: o.key ?? null, box: at(cy), speed: rise / life });
+    }
+
+    ticketH(c) { return this.L.ticketH + (c.party ? 15 : 0) + (c.recipe && RECIPES[c.recipe].tops.length > 4 ? 14 : 0); }
+    ticketBox(c) { const L = this.L, x = L.seats[c.seat].x + L.tdx, w = L.ticketW; return { x0: x - w / 2 - 2, x1: x + w / 2 + 2, y0: L.tickY - 2, y1: L.tickY + this.ticketH(c) + 3 }; }
+    rim(b) { return b.y - b.r * 0.86; }
+    above(p) { return p.y - p.w * 0.6; }
+
+    /** In landscape, the empty counter either side of the boards is where words can sit. */
+    sideBox(left) {
+        const { L } = this, first = L.bins[0], last = L.bins[L.bins.length - 1], P = L.pots[0], top = P.y + P.w * 0.62 + 8, bot = L.H - L.safe.bottom - 3;
+        const x0 = left ? L.safe.left + 5 : last.x + last.w / 2 + 8, x1 = left ? first.x - first.w / 2 - 8 : L.W - L.safe.right - 5;
+        return { x0, x1, y0: top, y1: bot, w: x1 - x0, h: bot - top, x: (x0 + x1) / 2, y: (top + bot) / 2 };
+    }
+    /** A banner takes its strip of the counter: anything there gives way. */
+    showBanner(text, life) { const { counter: c, land, W } = this.L, x0 = land ? W / 2 - 100 : 0, x1 = W - x0; this.banner = { text, t: 0, life, color: GOLD }; this.floats = this.floats.filter((f) => f.box.y1 < c - 8 || f.box.y0 > c + 40 || f.box.x1 < x0 || f.box.x0 > x1); }
 
     event(e) {
         const { k, snd, s, L } = this;
@@ -258,9 +300,9 @@ export class Stage {
                 this.seatVis.set(e.c.id, { rise: 0, pop: 0, x: seat.x, spoke: false, leave: 0 });
                 if (e.c.who && (REGULARS[e.c.who])) {
                     const line = greeting(this.save, e.c.who, Math.floor(k.time * 7));
-                    if (line) this.bubble = { c: e.c, text: line, t: 0, life: 3.4, name: REGULARS[e.c.who].name };
+                    if (line) this.say(e.c, REGULARS[e.c.who].name, line, 3.4);
                 }
-                if (e.c.who === "nana") this.bubble = { c: e.c, text: "...", t: 0, life: 6, name: "Nana Umi" };
+                if (e.c.who === "nana") this.say(e.c, "Nana Umi", "...", 6);
                 break;
             }
             case "ticket": this.bowlFx[e.bowl].born = 0; this.bowlFx[e.bowl].pops = {}; break;
@@ -270,10 +312,10 @@ export class Stage {
                 break;
             }
             case "noodlesReady": snd.ready(); this.potFx[e.pot].ping = 1; break;
-            case "noodlesOver": snd.over(); this.float(L.pots[e.pot].x, L.pots[e.pot].y - 36, "Overdone!", { color: "#ffc0a0", size: 13 }); break;
-            case "notYet": { snd.nope(); this.potFx[e.pot].shake = 1; this.float(L.pots[e.pot].x, L.pots[e.pot].y - 36, "Still raw", { size: 13 }); break; }
+            case "noodlesOver": snd.over(); this.float(L.pots[e.pot].x, this.above(L.pots[e.pot]), "Overdone!", { color: "#ffc0a0", size: 14, key: `p${e.pot}` }); break;
+            case "notYet": { snd.nope(); this.potFx[e.pot].shake = 1; this.float(L.pots[e.pot].x, this.above(L.pots[e.pot]), "Still raw", { size: 14, key: `p${e.pot}` }); break; }
             case "noBowl": snd.nope(); this.potFx[e.pot].shake = 1; break;
-            case "noOrder": this.potFx[e.pot].shake = 0.5; this.float(L.pots[e.pot].x, L.pots[e.pot].y - 36, "No orders yet", { size: 13 }); break;
+            case "noOrder": this.potFx[e.pot].shake = 0.5; this.float(L.pots[e.pot].x, this.above(L.pots[e.pot]), "No orders yet", { size: 14, key: `p${e.pot}` }); break;
             case "dump": snd.drop(); break;
             case "pulled": {
                 const b = L.bowls[e.bowl], p = L.pots[e.pot], from = this.lastPull ?? { x: p.x, y: p.y };
@@ -282,12 +324,12 @@ export class Stage {
                 break;
             }
             case "scoop": snd.scoop(); break;
-            case "wrongBroth": { snd.nope(); this.bowlFx[e.bowl].wob = 1; const b = k.bowls[e.bowl]; if (b.c) this.float(L.bowls[e.bowl].x, L.bowls[e.bowl].y - 44, `Wants ${BROTHS[RECIPES[b.c.recipe].broth].name}`, { size: 14, color: "#ffd9b0" }); break; }
-            case "spill": { const b = L.bowls[e.bowl]; snd.nope(); s.shake(1.5, 0.1); this.float(b.x, b.y - b.r * 0.7, "Whoa! Too full", { size: 14, color: "#ffc0a0" }); s.burst({ at: [b.x + b.r * 0.6, b.y + 10], count: 18, color: [BROTHS[k.bowls[e.bowl].brothKind ?? "shoyu"].color, CREAM], speed: [30, 110], life: [0.3, 0.6], size: [2, 4], gravity: 500, angle: Math.PI / 2, spread: 2 }); break; }
+            case "wrongBroth": { snd.nope(); this.bowlFx[e.bowl].wob = 1; const b = k.bowls[e.bowl]; if (b.c) this.float(L.bowls[e.bowl].x, this.rim(L.bowls[e.bowl]), `Wants ${BROTHS[RECIPES[b.c.recipe].broth].name}`, { size: 14, color: "#ffd9b0", key: `b${e.bowl}` }); break; }
+            case "spill": { const b = L.bowls[e.bowl]; snd.nope(); s.shake(1.5, 0.1); this.float(b.x, this.rim(b), "Whoa! Too full", { size: 14, color: "#ffc0a0", key: `b${e.bowl}` }); s.burst({ at: [b.x + b.r * 0.6, b.y + 10], count: 18, color: [BROTHS[k.bowls[e.bowl].brothKind ?? "shoyu"].color, CREAM], speed: [30, 110], life: [0.3, 0.6], size: [2, 4], gravity: 500, angle: Math.PI / 2, spread: 2 }); break; }
             case "poured": {
                 const q = k.brothQuality(e.level), b = L.bowls[e.bowl];
-                if (q === 2) { snd.climb("light"); this.float(b.x, b.y - b.r * 0.82, "Right on the line!", { color: GOLD, size: 15 }); this.flow += 0.2; }
-                else { snd.stumble(); this.float(b.x, b.y - b.r * 0.82, q === 1 ? (e.level < 1 ? "A bit shy" : "A bit full") : "Top it up", { size: 13 }); }
+                if (q === 2) { snd.climb("light"); this.float(b.x, this.rim(b), "Right on the line!", { color: GOLD, size: 15, key: `b${e.bowl}` }); this.flow += 0.2; }
+                else { snd.stumble(); this.float(b.x, this.rim(b), q === 1 ? (e.level < 1 ? "A bit shy" : "A bit full") : "Top it up", { size: 14, key: `b${e.bowl}` }); }
                 break;
             }
             case "chop": {
@@ -295,7 +337,7 @@ export class Stage {
                 snd.chop(); f.chop = 1; f.knife = -f.knife; f.pulse = 1;
                 const id = k.bins[e.bin].id, col = { chashu: ["#e8a888", "#fff0d8"], egg: ["#ffffff", "#f8a13a"], negi: ["#8fc058", "#d8ecb0"], swirl: ["#ffffff", "#f06090"], tomato: ["#e0402a", "#ffb060"], mushroom: ["#8a5a38", "#f0d8b0"] }[id] ?? [CREAM, CREAM];
                 s.burst({ at: [b.x, b.y - 4], count: 6, color: col, speed: [40, 120], life: [0.15, 0.32], size: [1.5, 3.2], gravity: 500, angle: -Math.PI / 2, spread: 1.5 });
-                if (e.staff) this.float(b.x, b.y - b.h * 0.6, "Mio!", { size: 12, color: "#ffd0a0" });
+                if (e.staff) this.float(b.x, b.y - b.h * 0.72, "Mio!", { size: 14, color: "#ffd0a0", key: `n${e.bin}` });
                 break;
             }
             case "placed": {
@@ -304,16 +346,16 @@ export class Stage {
                 this.flights.push({ top: T.frame, id: e.id, x0: from.x, y0: from.y, x1: box.x + T.slot[0] * ix * 0.86, y1: box.y + T.slot[1] * iy * 0.86, t: 0, dur: e.neat ? 0.09 : 0.16, bowl: e.bowl, neat: e.neat, size: T.size * ix * 1.9 });
                 break;
             }
-            case "emptyBin": { snd.nope(); this.binFx[e.bin].shake = 1; if (TOPPINGS[k.bins[e.bin].id].sliced) this.float(L.bins[e.bin].x, L.bins[e.bin].y - L.bins[e.bin].h * 0.6, "Chop me!", { size: 13 }); break; }
+            case "emptyBin": { snd.nope(); this.binFx[e.bin].shake = 1; if (TOPPINGS[k.bins[e.bin].id].sliced) this.float(L.bins[e.bin].x, L.bins[e.bin].y - L.bins[e.bin].h * 0.72, "Chop me!", { size: 14, key: `n${e.bin}` }); break; }
             case "noTop": snd.nope(); this.binFx[e.bin].shake = 1; break;
-            case "notReady": { snd.nope(); this.bowlFx[e.bowl].wob = 1; const m = k.missing(k.bowls[e.bowl]); this.float(L.bowls[e.bowl].x, L.bowls[e.bowl].y - 40, m[0] === "noodles" ? "Needs noodles" : "Needs broth", { size: 14 }); break; }
-            case "gull": { snd.gull(); const b = L.bins[e.bin]; this.binFx[e.bin].gull = 0; this.float(b.x, b.y - b.h * 0.7, "Shoo it!", { size: 13, color: "#ffe0a0" }); break; }
-            case "gullSteal": { snd.steal(); this.binFx[e.bin].shake = 1; this.float(L.bins[e.bin].x, L.bins[e.bin].y - L.bins[e.bin].h * 0.7, "Thief!", { size: 13, color: "#ffc0a0" }); break; }
+            case "notReady": { snd.nope(); this.bowlFx[e.bowl].wob = 1; const m = k.missing(k.bowls[e.bowl]); this.float(L.bowls[e.bowl].x, this.rim(L.bowls[e.bowl]), m[0] === "noodles" ? "Needs noodles" : "Needs broth", { size: 14, key: `b${e.bowl}` }); break; }
+            case "gull": { snd.gull(); const b = L.bins[e.bin]; this.binFx[e.bin].gull = 0; this.float(b.x, b.y - b.h * 0.88, "Shoo it!", { size: 14, color: "#ffe0a0", key: `n${e.bin}` }); break; }
+            case "gullSteal": { snd.steal(); this.binFx[e.bin].shake = 1; this.float(L.bins[e.bin].x, L.bins[e.bin].y - L.bins[e.bin].h * 0.88, "Thief!", { size: 14, color: "#ffc0a0", key: `n${e.bin}` }); break; }
             case "shoo": { snd.shoo(); const b = L.bins[e.bin]; s.burst({ at: [b.x, b.y - 6], count: 12, color: ["#ffffff", "#c8d0da"], speed: [80, 200], life: [0.25, 0.5], size: [2, 4], gravity: 300 }); this.flee = { x: b.x, y: b.y - 10, t: 0 }; break; }
-            case "trainWarn": { snd.trainWarn(); this.trainAt = e.at; this.banner = { text: "Train due!", t: 0, life: 1.6, color: GOLD }; break; }
+            case "trainWarn": { snd.trainWarn(); this.trainAt = e.at; this.showBanner("Train due!", 1.6); break; }
             case "train": { snd.train(); this.trainV = -1; s.shake(1.6, 0.5); this.trainAt = null; break; }
-            case "partyDone": { const p = L.seats[e.c.seat] ?? { x: L.W / 2, y: L.counter }; this.float(p.x, L.counter - 60, `Party tip ${money(e.bonus)}`, { color: GOLD, size: 15, big: true }); break; }
-            case "serve": this.serveFx(e); if (e.staff) this.float(L.bowls[e.bowl].x, L.bowls[e.bowl].y, "Sora!", { size: 13, color: "#ffd0a0" }); break;
+            case "partyDone": this.partyTip = e.bonus; break;
+            case "serve": this.serveFx(e); if (e.staff) this.float(L.bowls[e.bowl].x, this.rim(L.bowls[e.bowl]), "Sora!", { size: 14, color: "#ffd0a0", key: `b${e.bowl}` }); break;
             case "slurp": {
                 const vis = this.seatVis.get(e.c.id), seat = L.seats[e.c.seat];
                 snd.slurp();
@@ -325,7 +367,7 @@ export class Stage {
                 snd.walk(); snd.stumble();
                 const seat = L.seats[e.c.seat];
                 const v = this.seatVis.get(e.c.id); if (v) v.walk = true;
-                this.float(seat.x, L.counter - 70, "Maybe next time", { size: 13, color: "#ffd0b8" });
+                this.float(seat.x + L.pdx, L.counter - 40, "Maybe next time", { size: 14, color: "#ffd0b8", key: `s${e.c.seat}` });
                 break;
             }
             case "leave": { const v = this.seatVis.get(e.c.id); if (v) v.leave = 0.001; break; }
@@ -355,15 +397,15 @@ export class Stage {
             for (let i = 0; i < 26; i++) this.puff(x + Math.cos(i) * 34, y - Math.abs(Math.sin(i * 1.7)) * 16, 1.9, 1.4, true);
             s.burst({ at: [x, y - 40], count: 26, color: [GOLD, "#fff6d8"], speed: [80, 240], life: [0.3, 0.7], size: [2, 4.5], gravity: 240 });
             this.ripples.push({ x, y: y - 44, t: 0, life: 0.5, r: 60, c: GOLD });
-            this.float(x, y - 66, label, { color: GOLD, size: 26, big: true, life: 1.3 });
-            this.flow = Math.min(1, this.flow + 0.34);
+                        this.flow = Math.min(1, this.flow + 0.34);
             if (!this.momented || e.combo % 3 === 0) { this.momented = true; this.moment = { x, t: 0 }; this.s.timeScale = 0.45; for (let i = 0; i < 16; i++) this.puff(x + (i - 8) * 13, y - 6, 2.6, 1.9, true); }
-        } else { (e.rating === 2 ? snd.good() : snd.meh()); this.float(x, y - 66, label, { color: CREAM, size: 20, big: true }); this.flow *= e.rating === 2 ? 0.8 : 0.3; }
-        if (e.combo >= 2) this.float(x, y - 42, `${e.combo} in a row`, { color: "#ffc98a", size: 14 });
+        } else { (e.rating === 2 ? snd.good() : snd.meh()); this.flow *= e.rating === 2 ? 0.8 : 0.3; }
+        const parts = [`+${money(e.pay + e.tip + (e.bonus ?? 0))}`];
+        if (e.bonus) parts.push("party tip"); else if (e.combo >= 2) parts.push(`${e.combo} in a row`);
+        this.float(x + L.pdx, L.land ? y + 16 : y - 58, label, { color: e.rating === 3 ? GOLD : CREAM, size: e.rating === 3 ? 26 : 20, big: true, life: 1.3, sub: parts.join("  ·  "), key: `s${e.c.seat}` });
         const n = 3 + e.rating * 2;
         for (let i = 0; i < n; i++) this.coins.push({ x: x + (i - n / 2) * 7, y: y - 24, t: -i * 0.04, x1: 0, y1: 0 });
         this.cashTarget = this.k.cash;
-        if (e.tip) this.float(x + 20, y - 18, `+${money(e.pay + e.tip)}`, { size: 14, color: "#ffe9b0" });
     }
 
     puff(x, y, size = 1, life = 1.2, gold = false) {
@@ -422,7 +464,7 @@ export class Stage {
 
         for (const p of this.puffs) { p.t += dt; p.x += (p.vx + Math.sin(p.t * 2.2 + p.seed) * 9) * dt; p.y += p.vy * dt; }
         this.puffs = this.puffs.filter((p) => p.t < p.life);
-        for (const f of this.floats) { f.t += dt; f.y -= dt * (f.big ? 18 : 26); }
+        for (const f of this.floats) { f.t += dt; f.y -= dt * f.speed; }
         this.floats = this.floats.filter((f) => f.t < f.life);
         for (const r of this.ripples) r.t += dt;
         this.ripples = this.ripples.filter((r) => r.t < r.life);
@@ -439,8 +481,8 @@ export class Stage {
                 if (f.kind) {
                     fx.vd -= 26; snd.splash();
                     s.burst({ at: [b.x, b.y], count: 14, color: ["#fff2d0", BROTHS[k.bowls[f.bowl].brothKind ?? "shio"].light], speed: [50, 160], life: [0.2, 0.42], size: [1.5, 3.4], gravity: 480, angle: -Math.PI / 2, spread: 1.6 });
-                    if (f.q === 2) { snd.climb("medium"); this.float(b.x, b.y - b.r * 0.82, "Just right!", { color: GOLD, size: 15 }); this.flow = Math.min(1, this.flow + 0.2); s.freeze(0.03); }
-                    else { snd.stumble(); this.float(b.x, b.y - b.r * 0.82, f.q === 1 ? "A little off" : "Mushy", { size: 13 }); }
+                    if (f.q === 2) { snd.climb("medium"); this.float(b.x, this.rim(b), "Just right!", { color: GOLD, size: 15, key: `b${f.bowl}` }); this.flow = Math.min(1, this.flow + 0.2); s.freeze(0.03); }
+                    else { snd.stumble(); this.float(b.x, this.rim(b), f.q === 1 ? "A little off" : "Mushy", { size: 14, key: `b${f.bowl}` }); }
                 } else {
                     fx.vd -= 11; fx.pops[f.id] = 1;
                     if (f.neat) { snd.climb("light"); s.burst({ at: [f.x1, f.y1], count: 5, color: [GOLD, "#fff"], speed: [30, 80], life: [0.14, 0.28], size: [1.4, 2.4], gravity: 0 }); this.ripples.push({ x: f.x1, y: f.y1, t: 0, life: 0.3, r: 18, c: GOLD }); }
@@ -588,8 +630,8 @@ export class Stage {
             d.sprite("broth", { frame: BROTHS[id].frame, x, y: y - h * 0.122, width: w * 0.72, height: w * 0.42 });
             const hold = k.ladle?.kind === id;
             if (!hold) d.sprite("ladle", { x: x + w * 0.16, y: y - h * 0.3, width: w * 1.0, height: w * 0.4, rot: -0.1 });
-            d.rect(w * 0.84, 14, { x, y: y + h * 0.56, color: SOY, radius: 7, opacity: 0.86 });
-            d.text(BROTHS[id].name, { x, y: y + h * 0.56, size: Math.min(11, w * 0.16), bold: true, font: FONT, color: BROTHS[id].light === "#fff8e8" ? "#fff8e8" : BROTHS[id].light });
+            d.rect(Math.max(w * 0.88, 48), 16, { x, y: y + h * 0.56, color: SOY, radius: 8, opacity: 0.9 });
+            if (!this.quiet) d.text(w < 70 && id === "tonkotsu" ? "Tonko" : BROTHS[id].name, { x, y: y + h * 0.56, size: 13, bold: true, font: FONT, color: BROTHS[id].light });
         });
     }
 
@@ -618,7 +660,7 @@ export class Stage {
                 d.sprite("whole", { frame: id, y: -s0 * 0.14 - f.chop * 2, width: B.w * 0.76, height: B.w * 0.76 * 0.78, opacity: stock >= TUNE.cap ? 0.75 : 1 });
                 const n = Math.min(stock, 6);
                 for (let j = 0; j < n; j++) d.sprite("tops", { frame: T.frame, x: (j - (n - 1) / 2) * s0 * 0.13, y: s0 * 0.22 + (j % 2) * 2, width: s0 * 0.36, height: s0 * 0.3 });
-                if (stock <= 0) { const q = Math.sin(this.t * 6) * 0.5 + 0.5; d.line([-B.w * 0.34, s0 * 0.24], [B.w * 0.34, s0 * 0.24], { width: 2, color: CREAM, opacity: 0.4 + q * 0.5 }); d.text("chop", { y: s0 * 0.33, size: 11, bold: true, font: FONT, color: CREAM }); }
+                if (stock <= 0) { const q = Math.sin(this.t * 6) * 0.5 + 0.5; d.line([-B.w * 0.34, s0 * 0.24], [B.w * 0.34, s0 * 0.24], { width: 2, color: CREAM, opacity: 0.4 + q * 0.5 }); if (!this.quiet) d.text("chop", { y: s0 * 0.34, size: 13, bold: true, font: FONT, color: CREAM }); }
                 if (f.chop > 0) d.sprite("knife", { x: f.knife * B.w * (0.16 - (1 - f.chop) * 0.4) * 1.0, y: -s0 * 0.26 + (1 - f.chop) * s0 * 0.12, width: B.w * 0.74, height: B.w * 0.31, flipX: f.knife < 0, rot: -0.5 * f.knife + (1 - f.chop) * 0.4 * f.knife });
             } else d.sprite("tops", { frame: T.frame, width: s0 * 0.86, height: s0 * 0.78 });
             d.pop();
@@ -777,38 +819,43 @@ export class Stage {
 
     drawHint(d) {
         const sh = this.k.shift, wait = sh.teach ? 0.5 : this.o.hints ? 6 : 1e9;
-        if (this.idle < wait || this.grab || this.endT >= 0) return;
+        if (this.idle < wait || this.grab || this.endT >= 0) { this.hintBox = null; return; }
         const st = this.nextStep();
-        if (!st) return;
+        if (!st) { this.hintBox = null; return; }
         const L = this.L, a = (this.t * 0.8) % 1, w = 46;
         let x = st.x0, y = st.y0, tap = 0;
         if (st.kind === "tap") { tap = Math.abs(Math.sin(this.t * 5)); }
         else if (st.kind === "chop") { const q = Math.sin(this.t * 7); x = (st.x0 + st.x1) / 2 + q * 22; }
         else { const q = clamp(a * 1.35); x = mix(st.x0, st.x1, ease(q)); y = mix(st.y0, st.y1, ease(q)); }
         d.sprite("hand", { x: x + w * 0.14, y: y + w * 0.5 + tap * 6, width: w, height: w * 1.07, opacity: st.kind === "tap" || st.kind === "chop" ? 0.96 : clamp(Math.min(a * 8, (1 - a) * 8)) });
-        const ty = L.land ? L.bins[0].y - L.bins[0].h * 0.72 : L.bowls[0].y - L.bowls[0].r * 1.0 - 6, tw = Math.min(L.W - 28, 330);
+        this.hintBox = null;
         if (sh.teach) {
-            d.rect(tw, 26, { x: L.W / 2, y: ty, color: SOY, radius: 13, opacity: 0.88 });
-            d.text(st.say, { x: L.W / 2, y: ty, size: 13.5, bold: true, font: FONT, color: CREAM });
+            const side = L.land ? this.sideBox(this.save.hand !== "left" ? false : true) : null, B = L.bowls[0], tw = side ? side.w : Math.min(L.W - 24, 336);
+            const m = this.game.renderer.measureText(st.say, { size: 14, font: FONT, bold: true, align: "center", maxWidth: tw - 16, lineHeight: 1.18 }), th = m.height + 12;
+            const hx = side ? side.x : L.W / 2, hy = side ? side.y1 - th / 2 : Math.min(B.y + B.r * 1.0 + 12 + th / 2, L.pots[0].y - L.pots[0].w * 0.52 - th / 2 - 2);
+            d.rect(tw, th, { x: hx, y: hy, color: SOY, radius: 12, opacity: 0.92 });
+            d.text(st.say, { x: hx, y: hy, size: 14, bold: true, font: FONT, color: CREAM, maxWidth: tw - 16, lineHeight: 1.18 });
+            this.hintBox = { x0: hx - tw / 2, x1: hx + tw / 2, y0: hy - th / 2, y1: hy + th / 2 };
         }
     }
 
     drawTickets(d) {
-        const { k, L } = this, w = L.ticketW, h = L.land ? w * 0.82 : Math.min(54, w * 0.62 + 4), icon = Math.min(21, w * 0.27);
+        const { k, L } = this, w = L.ticketW, icon = Math.min(21, (w - 8) / 3 - 2);
         for (const c of k.customers) {
             if (c.state !== "seated" || c.seat < 0) continue;
             const seat = L.seats[c.seat], v = this.seatVis.get(c.id); if (!v) continue;
-            const R = RECIPES[c.recipe], x = seat.x + L.tdx, y = L.tickY + h / 2 - (1 - back(v.rise)) * 30, frac = clamp(c.patience / c.max);
+            const R = RECIPES[c.recipe], x = seat.x + L.tdx, h = this.ticketH(c), y = L.tickY + h / 2 + (1 - ease(v.rise)) * 12, frac = clamp(c.patience / c.max);
             d.push(); d.translate(x, y); d.rotate(Math.sin(c.id * 2.1) * 0.02 + Math.sin(this.t * 1.5 + c.id) * 0.01);
             d.rect(w + 2, h + 3, { y: 1.5, color: "#000", opacity: 0.28, radius: 5 });
             d.rect(w, h, { color: c.bowl >= 0 ? "#fff6e2" : "#e9dcc2", radius: 4 });
-            d.rect(w, 5, { y: -h / 2 + 2.5, color: c.party ? "#e0a82e" : c.who ? RED : "#a88a6a", radius: 2 });
-            if (c.party) d.text(`Party ${c.party}`, { y: h / 2 + 8, size: 10.5, bold: true, font: FONT, color: GOLD });
+            const band = c.party ? 19 : 5, inner = band - 5;
+            d.rect(w, band, { y: -h / 2 + band / 2, color: c.party ? "#e0a82e" : c.who ? RED : "#a88a6a", radius: 2 });
+            if (c.party) d.text(`Party ${c.party}`, { y: -h / 2 + 9.5, size: 13, bold: true, font: FONT, color: SOY });
             const icons = [{ broth: R.broth }, { noodle: R.noodle }, ...R.tops.map((t) => ({ top: t }))];
-            const cols = Math.max(2, Math.floor((w - 6) / (icon + 2))), rows = Math.ceil(icons.length / cols);
+            const cols = Math.max(3, Math.floor((w - 6) / (icon + 2))), rows = Math.ceil(icons.length / cols);
             const b = c.bowl >= 0 ? k.bowls[c.bowl] : null;
             icons.forEach((ic, i) => {
-                const row = Math.floor(i / cols), inRow = row === rows - 1 ? icons.length - row * cols : cols, cx = (i % cols - (inRow - 1) / 2) * (icon + 2), cy = (row - (rows - 1) / 2) * (icon + 1) - 2;
+                const row = Math.floor(i / cols), inRow = row === rows - 1 ? icons.length - row * cols : cols, cx = (i % cols - (inRow - 1) / 2) * (icon + 2), cy = (row - (rows - 1) / 2) * (icon + 1) - 2 + inner / 2;
                 let done = false;
                 if (ic.broth) { d.circle(icon * 0.44, { x: cx, y: cy, color: BROTHS[ic.broth].color }); d.circle(icon * 0.44, { x: cx, y: cy, color: SOY, outline: 1.2 }); done = b && b.level >= TUNE.pour.okLo; }
                 else if (ic.noodle) { d.sprite("nest", { frame: NOODLES[ic.noodle].frame, x: cx, y: cy, width: icon * 1.1, height: icon * 0.84 }); done = !!b?.noodle; }
@@ -841,10 +888,11 @@ export class Stage {
         // How the shift is going
         const left = k.endless ? null : k.arrivals.length + k.line.length;
         const sy = y + 26;
-        d.rect(k.endless ? 118 : 106, 20, { x: px + (k.endless ? 59 : 53), y: sy, color: SOY, radius: 10, opacity: 0.8 });
-        d.text(k.endless ? `${k.served} bowls served` : left > 0 ? `${left} more to come` : "Last orders", { x: px + (k.endless ? 59 : 53), y: sy, size: 12, bold: true, font: FONT, color: CREAM });
-        if (this.trainAt) { const eta = Math.max(0, this.trainAt - k.time); d.rect(96, 20, { x: mx, y: sy, color: "#101820", radius: 4 }); d.text(`TRAIN ${eta.toFixed(0)}s`, { x: mx, y: sy, size: 12.5, bold: true, font: FONT, color: "#ffc94a" }); }
-        if (k.combo >= 2) { d.text(`${k.combo} perfect`, { x: mx, y: sy, size: 13, bold: true, font: FONT, color: GOLD }); }
+        d.rect(120, 20, { x: px + 60, y: sy, color: SOY, radius: 10, opacity: 0.8 });
+        d.text(k.endless ? `${k.served} bowls served` : left > 0 ? `${left} more to come` : "Last orders", { x: px + 60, y: sy, size: 13, bold: true, font: FONT, color: CREAM });
+        const slot = px + 124;
+        if (this.trainAt) { const eta = Math.max(0, this.trainAt - k.time); d.rect(90, 20, { x: slot + 45, y: sy, color: "#101820", radius: 4 }); d.text(`TRAIN ${eta.toFixed(0)}s`, { x: slot + 45, y: sy, size: 13, bold: true, font: FONT, color: "#ffc94a" }); }
+        if (k.combo >= 2) { const cx = W - safe.right - 52; d.rect(84, 20, { x: cx, y: sy, color: SOY, radius: 10, opacity: 0.8 }); d.text(`${k.combo} perfect`, { x: cx, y: sy, size: 13, bold: true, font: FONT, color: GOLD }); }
         for (const c of this.coins) {
             const q = clamp(c.t / 0.46); if (c.t < 0) continue;
             const e = q * q, x = mix(c.x, px + 15, e), yy = mix(c.y, y, e) - Math.sin(q * 3.14) * 24;
@@ -852,17 +900,24 @@ export class Stage {
         }
     }
 
+    /** Speech sits over faces on tall screens, and on the empty counter beside the boards on wide ones. Never on tickets or pots. */
+    say(c, name, text, life) {
+        const L = this.L, seat = L.seats[c.seat], left = seat.x < L.W / 2, side = L.land ? this.sideBox(left) : null, w = side ? side.w : Math.min(L.W - 30, 240);
+        const body = this.game.renderer.measureText(text, { size: 13.5, font: SERIF, bold: false, align: "center", maxWidth: w - 12, lineHeight: 1.12 }), h = body.height + 25;
+        const x = side ? side.x : clamp(seat.x + (left ? 1 : -1) * (L.bustH * 0.5 + w * 0.42), w / 2 + 10, L.W - w / 2 - 10), y = side ? side.y1 - h / 2 : L.counter - h / 2 - 6;
+        this.bubble = { c, name, text, t: 0, life, w, h, x, y };
+        const B = this.bubbleBox = { x0: x - w / 2 - 2, x1: x + w / 2 + 2, y0: y - h / 2 - 2, y1: y + h / 2 + 2 };
+        this.floats = this.floats.filter((f) => !(f.box.x0 < B.x1 && f.box.x1 > B.x0 && f.box.y0 < B.y1 && f.box.y1 > B.y0));
+    }
+
     drawBubble(d) {
-        const b = this.bubble, L = this.L;
-        if (!b || b.c.seat < 0) return;
-        const seat = L.seats[b.c.seat], w = Math.min(L.W - 30, 240), lines = Math.ceil(b.text.length / 30), h = 28 + lines * 15, left = seat.x < L.W / 2, x = clamp(seat.x + (left ? 1 : -1) * (L.bustH * 0.5 + w * 0.42), w / 2 + 10, L.W - w / 2 - 10);
-        const pop = back(clamp(b.t / 0.18)), fade = clamp((b.life - b.t) * 4), y = L.counter - h / 2 - 6;
-        d.push(); d.translate(x, y); d.scale(pop, pop);
-        d.rect(w + 4, h + 4, { color: SOY, radius: 12, opacity: fade * 0.9 });
-        d.rect(w, h, { color: "#fff6e2", radius: 10, opacity: fade });
-        d.text(b.name, { y: -h / 2 + 10, size: 11, bold: true, font: FONT, color: RED, opacity: fade });
-        d.text(b.text, { y: 7, size: 13, font: SERIF, color: SOY, maxWidth: w - 18, opacity: fade, lineHeight: 1.12 });
-        d.pop();
+        const b = this.bubble;
+        if (!b) return;
+        const a = clamp(Math.min(b.t * 9, (b.life - b.t) * 4)), { x, h, w } = b, y = b.y + (1 - clamp(b.t / 0.14)) * 8;
+        d.rect(w + 4, h + 4, { x, y, color: SOY, radius: 12, opacity: a * 0.9 });
+        d.rect(w, h, { x, y, color: "#fff6e2", radius: 10, opacity: a });
+        d.text(b.name, { x, y: y - h / 2 + 11, size: 13, bold: true, font: FONT, color: RED, opacity: a });
+        d.text(b.text, { x, y: y + 11, size: 13.5, font: SERIF, color: SOY, maxWidth: w - 12, opacity: a, lineHeight: 1.12 });
     }
 
     drawFloats(d) {
@@ -874,17 +929,18 @@ export class Stage {
             });
         }
         for (const f of this.floats) {
-            const q = f.t / f.life, a = clamp((1 - q) * 3), s = f.big ? back(clamp(f.t / 0.16)) : 1;
-            const half = f.text.length * f.size * 0.3 + 6;
-            d.push(); d.translate(clamp(f.x, half, this.L.W - half), f.y); d.scale(s, s);
-            d.text(f.text, { x: 1, y: 2, size: f.size, bold: true, font: FONT, color: "#1a0a06", opacity: a * 0.75 });
-            d.text(f.text, { size: f.size, bold: true, font: FONT, color: f.color, opacity: a });
+            const q = f.t / f.life, a = clamp((1 - q) * 3);
+            const yy = f.sub ? -8 : 0;
+            d.push(); d.translate(f.x, f.y);
+            d.rect(f.box.x1 - f.box.x0, f.box.y1 - f.box.y0 - 12, { color: "#1a0a06", radius: 9, opacity: a * 0.55 });
+            d.text(f.text, { y: yy, size: f.size, bold: true, font: FONT, color: f.color, opacity: a });
+            if (f.sub) d.text(f.sub, { y: f.size * 0.62 + 1, size: 14, bold: true, font: FONT, color: "#ffe9b0", opacity: a });
             d.pop();
         }
         if (this.banner) {
             const b = this.banner, L = this.L, a = clamp(Math.min(b.t * 6, (b.life - b.t) * 4));
-            d.rect(L.W, 46, { x: L.W / 2, y: L.counter + 2, color: SOY, opacity: a * 0.82 });
-            d.text(b.text, { x: L.W / 2, y: L.counter + 2, size: 26, bold: true, font: FONT, color: b.color, opacity: a });
+            d.rect(L.land ? 190 : L.W, 44, { x: L.W / 2, y: L.counter + 16, color: SOY, radius: L.land ? 14 : 0, opacity: a * 0.9 });
+            d.text(b.text, { x: L.W / 2, y: L.counter + 16, size: 26, bold: true, font: FONT, color: b.color, opacity: a });
         }
     }
 

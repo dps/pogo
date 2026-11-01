@@ -1,5 +1,11 @@
-// GNOME MAN'S LAND: all art is painted in code. Nothing here is loaded from a file.
+// GNOME MAN'S LAND: art is painted in code, except the generated weapons in art/. Nothing here is loaded from a file.
 // Themes are painted lazily (one 512px atlas per level) so that startup stays fast on phones.
+
+import vm0 from "./art/vm0.js";
+import vm1 from "./art/vm1.js";
+import vm2 from "./art/vm2.js";
+import vm3 from "./art/vm3.js";
+import vm4 from "./art/vm4.js";
 
 export const ATLAS = 512, CELL = 128, CELLS = 4;
 
@@ -779,77 +785,8 @@ function sleeve(p, x0, y0, x1, y1, w) {
         p.line(x - dx / l * w * 0.46, y - dy / l * w * 0.46, x + dx / l * w * 0.46, y + dy / l * w * 0.46, i % 2 ? "#a765d6" : "#5a2a8a", 3);
     }
 }
-function hand(p, x, y, s = 1) {
-    p.ellipse(x, y, 19 * s, 16 * s, "#e9b08e", "#b97a5a");
-    for (let i = 0; i < 4; i++) p.ellipse(x - 12 * s + i * 8 * s, y - 11 * s, 4.2 * s, 7 * s, "#f0bd9c", "#c98a68");
-    p.circle(x + 6 * s, y - 3 * s, 3.2 * s, "#f4c542"); // Wedding ring
-}
-
 function paintWeapons(A) {
-    const W = 320, H = 240, opt = { frames: 2, smooth: true };
-    A.paint("vm0", W, H, (p, f) => { // Pea Shooter: a fat green pod pistol
-        sleeve(p, 250, 250, 190, 190, 46); hand(p, 178, 172, 1.25);
-        p.poly([[150, 180], [186, 180], [196, 240], [156, 240]], "#7a5128");
-        p.line(160, 200, 186, 200, "#a3743f", 3);
-        const y = f ? 112 : 110;
-        p.poly([[120, y + 66], [200, y + 66], [176, y - 10], [144, y - 10]], "#3f9a3a");
-        p.poly([[160, y + 66], [200, y + 66], [176, y - 10], [160, y - 10]], "#266e2c");
-        p.ellipse(160, y - 10, 19, 7, "#1d4f22"); p.ellipse(160, y - 11, 11, 4, "#0c2410");
-        for (const yy of [y + 44, y + 20, y]) { p.ellipse(160 + (yy - y) * 0, yy, 22 + (yy - y) * 0.2, 9, "#6fd25c", "#2f8a36"); p.ellipse(153, yy - 3, 6, 3, "#c7ff9a"); }
-        p.rect(128, y + 62, 64, 14, "#c9962a"); p.rect(128, y + 62, 64, 4, "#f4d060");
-        p.outline(OUT).shade(0.2, 0.2);
-    }, opt);
-    A.paint("vm1", W, H, (p, f) => { // Thornbuss: a flared blunderbuss, held in two hands
-        const y = f ? 14 : 0;
-        sleeve(p, 40, 260, 112, 188 + y, 42); sleeve(p, 280, 260, 212, 206, 46);
-        p.poly([[122, 200], [198, 200], [226, 244], [96, 244]], "#7a5128");
-        p.poly([[160, 200], [198, 200], [226, 244], [160, 244]], "#5a3a1c");
-        p.poly([[132, 208], [188, 208], [178, 60], [142, 60]], "#8a5a30");
-        p.poly([[160, 208], [188, 208], [178, 60], [160, 60]], "#6a4220");
-        p.poly([[140, 150], [180, 150], [172, 58], [148, 58]], "#c9962a");
-        p.poly([[160, 150], [180, 150], [172, 58], [160, 58]], "#9a6e1c");
-        p.ellipse(160, 56, 46, 18, "#f4c542", "#a8741a"); p.ellipse(160, 56, 35, 12, "#3a2410"); p.ellipse(160, 58, 26, 8, "#120a06");
-        for (const [a, b] of [[-14, 0], [0, -4], [14, 1], [-4, 4], [8, 5]]) p.poly([[160 + a - 3, 58 + b], [160 + a + 3, 58 + b], [160 + a, 42 + b]], "#8ad65a");
-        p.rect(128, 150, 64, 10, "#f4c542");
-        hand(p, 116, 178 + y, 1.2); hand(p, 206, 212, 1.2);
-        p.outline(OUT).shade(0.2, 0.2);
-    }, opt);
-    A.paint("vm2", W, H, (p, f) => { // Hornet Hose: a bumblebee rotary sprinkler; frame swaps to spin
-        sleeve(p, 40, 260, 104, 196, 42); sleeve(p, 280, 260, 216, 196, 46);
-        p.ellipse(160, 184, 76, 66, "#ffd24a", "#c98a1a");
-        for (const yy of [150, 186, 222]) p.ellipse(160, yy, 76 - Math.abs(yy - 184) * 0.6, 11, "#2b1b14");
-        p.ellipse(132, 156, 16, 8, "#ffffffaa");
-        p.rect(116, 100, 88, 42, "#6a6a78"); p.rect(116, 100, 88, 10, "#9a9aaa");
-        const rot = f ? 11 : 0;
-        for (let i = 0; i < 4; i++) {
-            const x = 128 + i * 21 + (i % 2 ? rot * 0.4 : -rot * 0.2);
-            p.rect(x - 7, 44, 14, 66, i % 2 ? "#c8d2dc" : "#8a94a0");
-            p.rect(x - 9, 40, 18, 9, "#3a3f58");
-        }
-        p.rect(118, 74, 84, 9, "#c9962a");
-        hand(p, 106, 196, 1.2); hand(p, 214, 196, 1.2);
-        p.outline(OUT).shade(0.2, 0.2);
-    }, opt);
-    A.paint("vm3", W, H, (p, f) => { // Pumpkin Mortar: big tube with a pumpkin ready to go
-        sleeve(p, 30, 262, 96, 196, 44); sleeve(p, 290, 262, 228, 204, 48);
-        p.poly([[104, 236], [216, 236], [202, 74], [118, 74]], "#4a4a58");
-        p.poly([[160, 236], [216, 236], [202, 74], [160, 74]], "#2c2c38");
-        p.rect(112, 100, 96, 12, "#c9962a"); p.rect(106, 180, 108, 14, "#c9962a");
-        p.ellipse(160, 74, 46, 16, "#6a6a78"); p.ellipse(160, 74, 36, 11, "#14141c");
-        if (!f) { for (let i = -2; i <= 2; i++) p.ellipse(160 + i * 12, 64, 14, 19, i % 2 ? "#f28a1c" : "#ffa42c", "#c75a10"); p.rect(155, 42, 10, 8, "#3a7d3a"); p.poly([[142, 60], [152, 60], [147, 52]], "#3a1a08"); p.poly([[168, 60], [178, 60], [173, 52]], "#3a1a08"); }
-        hand(p, 100, 200, 1.25); hand(p, 224, 208, 1.25);
-        p.outline(OUT).shade(0.2, 0.2);
-    }, opt);
-    A.paint("vm4", W, H, (p, f) => { // Bug Zapper: an electric tennis racket, pointed like a wand
-        sleeve(p, 240, 262, 190, 208, 46);
-        p.line(166, 240, 160, 124, "#3a3f58", 16); p.line(166, 240, 160, 124, "#5a6080", 6);
-        hand(p, 180, 204, 1.25);
-        p.ellipse(158, 76, 62, 66, "#7df0ff", "#2a8ad8"); p.ellipse(158, 76, 52, 56, "#0e2a4a");
-        for (let i = -4; i <= 4; i++) { p.line(158 + i * 11, 26, 158 + i * 11, 126, "#4ac8ff", 1.5); p.line(100, 76 + i * 11, 216, 76 + i * 11, "#4ac8ff", 1.5); }
-        if (f) { p.line(120, 50, 150, 80, "#ffffff", 3); p.line(150, 80, 138, 96, "#ffffff", 3); p.line(138, 96, 190, 110, "#ffffff", 3); } else { p.circle(158, 76, 8, "#c8f8ff"); }
-        p.outline(OUT).shade(0.2, 0.2);
-    }, opt);
-    // Muzzle flash: frames 0 thorn green, 1 white-yellow, 2 orange, 3 electric
+    [vm0, vm1, vm2, vm3, vm4].forEach((url, i) => A.image(`vm${i}`, url));
     A.paint("mflash", 128, 128, (p, f) => {
         const cols = [["#d8ffa0", "#ffffff"], ["#ffd24a", "#ffffff"], ["#ff9a3c", "#fff0a0"], ["#7df0ff", "#ffffff"]][f];
         const pts = [];

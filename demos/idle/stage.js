@@ -7,10 +7,14 @@ const FONT = '"Arial Rounded MT Bold", ui-rounded, "SF Pro Rounded", system-ui, 
 export { FONT };
 export const crewFrame = (a, i) => a * 5 + i;
 
+/** The pane is ruled into lanes, top to bottom: HUD, rule band, speech lane, stage, action row. Text only ever goes in the speech lane or the two gutters beside the item. */
 export function metrics(G) {
-    const P = G.pane, tw = Math.min(214, P.w * 0.56, P.h * 0.5), th = (tw * 200) / 420, sw = tw * 1.75, sh = (sw * 230) / 560;
-    const cx = P.x + P.w / 2, yTop = P.h * 0.62, yFeet = yTop + th * 0.8;
-    return { tw, th, sw, sh, cx, yTop, yFeet, slabY: yFeet + sh * 0.27, itemY: yTop - tw * 0.28 + 2, itemS: tw * 0.66 };
+    const P = G.pane, S = G.S, cx = P.x + P.w / 2, top = G.game.view.safe.top + 8, hudB = top + 80, rule = !S.ended && (S.act === 2 || S.act === 5) ? 38 : 0;
+    const laneY = hudB + rule, laneH = 40, gTop = laneY + laneH + 4, rowTop = P.h - 56 - (P.w > P.h * 0.9 ? G.game.view.safe.bottom : 0), rowY = rowTop + 27;
+    const tw = Math.min(214, P.w * 0.56, (rowTop - gTop - 2) / 1.46), th = tw * 0.54, sw = tw * 1.7, sh = (sw * 420) / 620;
+    const yFeet = rowTop - 2 - tw * 0.2, yTop = yFeet - th * 0.9, gBot = yFeet - tw * 0.74 - 2, rowH = Math.min(32, (gBot - gTop) / 3);
+    return { tw, th, sw, sh, cx, yTop, yFeet, slabY: yFeet + sh * 0.3, itemY: yTop - tw * 0.28 + 2, itemS: tw * 0.66, top, hudB, ruleY: hudB, laneY, laneH, gTop, gBot, rowH, rowY,
+        gL: [P.x + 30, cx - tw * 0.5 - 4], gR: [cx + tw * 0.5 + 4, P.x + P.w - 6] };
 }
 
 function drawItem(d, key, x, y, size, rot, sx, sy, a = 1) {
@@ -43,14 +47,11 @@ export function drawStage(d, G) {
 
     d.push(); d.translate(0, drift);
     // The driveway, broken loose if you've gone far enough.
-    const under = Math.max(0, Math.min(1, (A.L - 3.3) / 0.5)), cut = 112 / 230;
-    if (under > 0) d.sprite("slab", { x: M.cx, y: M.slabY + M.sh * (cut / 2), width: M.sw, height: M.sh * (1 - cut), crop: [0, 112, 560, 118], opacity: under });
-    d.sprite("slab", { x: M.cx, y: M.slabY - M.sh * ((1 - cut) / 2), width: M.sw, height: M.sh * cut, crop: [0, 0, 560, 112] });
+    d.sprite("slab", { x: M.cx, y: M.slabY, width: M.sw, height: M.sh });
 
-    // Rival.
-    if (S.act === 2 && !A.cust) drawPerson(d, 18, A.garyArm > 0 ? 1 : 0, M.cx + M.tw * 0.66, M.yFeet + 8, M.tw * 0.8, true, 1);
+    if (S.act === 2 && !A.cust) drawPerson(d, 18, A.garyArm > 0 ? 1 : 0, M.cx + reach(G, M), M.yFeet + 8, M.tw * 0.74, true, 1);
     // You, beside the table, close enough to reach.
-    drawPerson(d, 0, A.vendor > 0 ? 1 : 0, M.cx - M.tw * 0.66, M.yFeet + 8 - A.vendorHop, M.tw * 0.72, false, 1);
+    drawPerson(d, 0, A.vendor > 0 ? 1 : 0, M.cx - reach(G, M), M.yFeet + 8 - A.vendorHop, M.tw * 0.72, false, 1);
 
     const lean = A.tableRot;
     d.push(); d.translate(M.cx, M.yTop + M.th * 0.42); d.rotate(lean); d.scale(1 + A.tableSq * 0.06, 1 - A.tableSq * 0.07);
@@ -71,7 +72,7 @@ export function drawStage(d, G) {
     }
 
     // Its name, pinned to the table skirt.
-    if (!S.ended) { const st = E.act(S).stops[S.stop], tw = Math.min(M.tw - 18, textWidth(st.title, 10.5) + 18), ty = M.yTop + M.th * 0.3; d.rect(tw + 3, 22, { x: M.cx + 1, y: ty + 2, color: C.ink, radius: 3, opacity: 0.5 }); d.rect(tw, 20, { x: M.cx, y: ty, color: E.sold(S, "beige") ? "#ffffff" : C.paper, radius: 3 }); T(d, st.title, M.cx, ty, 10.5, { color: C.ink, maxW: tw - 8 }); }
+    if (!S.ended) { const st = E.act(S).stops[S.stop], tw = Math.min(M.tw * 0.64, textWidth(st.title, 10.5) + 18), ty = M.yTop + M.th * 0.3; d.rect(tw + 3, 22, { x: M.cx + 1, y: ty + 2, color: C.ink, radius: 3, opacity: 0.5 }); d.rect(tw, 20, { x: M.cx, y: ty, color: E.sold(S, "beige") ? "#ffffff" : C.paper, radius: 3 }); T(d, st.title, M.cx, ty, 10.5, { color: C.ink, maxW: tw - 8 }); }
 
     // Customer, on your side of things.
     const c = A.cust;
@@ -97,7 +98,10 @@ export function drawStage(d, G) {
         q(cx, cy2, 12, 12, 0, 0, 1, 1, 1, 1);
     }
 }
+/** How far from the middle people stand: beside the table, never in front of its label, never off the edge. */
+export const reach = (G, M) => Math.min(M.tw * 0.8, G.pane.w / 2 - M.tw * 0.29 - 2);
 function drawPerson(d, look, frame, x, feetY, h, flip, a) {
-    d.sprite("people", { frame: look * 2 + frame, x, y: feetY - h / 2, width: (h * 160) / 200, height: h, flipX: flip, opacity: a });
+    // One cut-out per character: a raised arm is now a little hop and lean, like a puppet on a stick.
+    d.sprite("people", { frame: look, x, y: feetY - h / 2 - frame * 5, width: (h * 200) / 260, height: h, flipX: flip, opacity: a, rot: frame * (flip ? -0.07 : 0.07) });
 }
 export const stageItemTop = (G) => metrics(G).itemY;

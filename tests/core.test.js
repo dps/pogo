@@ -706,3 +706,25 @@ test("a press during hit-stop isn't lost", () => {
     game.step(10);
     assert.equal(jumps, 1);
 });
+
+test("the audit sees text from draw hooks that overlaps", () => {
+    const game = createGame({ headless: true });
+    game.scene("a", (s) => { s.onDrawUI((d) => { d.text("Block 12", { x: 100, y: 100, size: 20 }); d.text("Poison 3", { x: 105, y: 102, size: 20 }); d.text("Clear", { x: 100, y: 300, size: 20 }); }); });
+    game.start("a");
+    game.render();
+    const hits = game.audit().filter((i) => i.code === "TEXT_OVERLAP");
+    assert.equal(hits.length, 1);
+    assert.match(hits[0].message, /Block 12/);
+});
+
+test("a solid panel hides text behind it, and repeated strings are outlines", () => {
+    const game = createGame({ headless: true });
+    game.scene("a", (s) => { s.onDrawUI((d) => {
+        d.text("Score", { x: 100, y: 100, size: 20 }); d.text("Score", { x: 101, y: 101, size: 20 }); d.text("Lives", { x: 104, y: 100, size: 20 });
+        d.rect(300, 300, { x: 100, y: 100, color: "#000" });
+        d.text("Paused", { x: 100, y: 100, size: 20 });
+    }); });
+    game.start("a");
+    game.render();
+    assert.equal(game.audit().filter((i) => i.code === "TEXT_OVERLAP").length, 0);
+});

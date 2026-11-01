@@ -64,7 +64,7 @@ const COMMON = ["cottage", "lane", "dock", "market", "wood"];
  */
 export const SCENARIOS = [
     {
-        id: "cove", name: "Pebble Cove", tag: "Your first harbour", start: { coins: 30, wood: 14 }, startSeason: 0, par: 20,
+        id: "cove", name: "Pebble Cove", tag: "Your first harbour", start: { coins: 46, wood: 16 }, startSeason: 0, par: 20,
         unlocks: [...COMMON, "garden"], tide: 1,
         storms: [{ day: 7, level: 0.95, name: "a spring squall" }],
         goals: [

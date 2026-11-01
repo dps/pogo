@@ -608,203 +608,6 @@ export interface Renderer {
 		quads: number;
 	};
 }
-export interface PaintOptions {
-	x?: number;
-	y?: number;
-	color?: ColorLike;
-	opacity?: number;
-}
-export declare class Draw {
-	private game;
-	private m;
-	private alpha;
-	private stack;
-	private colors;
-	constructor(game: Game);
-	private get r();
-	private paint;
-	/** @internal */
-	begin(e: Entity): void;
-	/** @internal Back to an untransformed, fully opaque state. */
-	reset(): void;
-	/** Save the transform. Pair with pop(). */
-	push(): void;
-	pop(): void;
-	translate(x: number, y: number): void;
-	rotate(angle: number): void;
-	scale(x: number, y?: number): void;
-	/** Everything drawn inside fn adds light instead of covering what's behind it: glows, sparks, lasers. */
-	additive(fn: () => void): void;
-	rect(w: number, h: number, o?: PaintOptions & {
-		radius?: number;
-		outline?: number;
-	}): void;
-	circle(radius: number, o?: PaintOptions & {
-		outline?: number;
-	}): void;
-	/** A line between two local points. */
-	line(a: VecLike, b: VecLike, o?: PaintOptions & {
-		width?: number;
-	}): void;
-	/** A filled convex polygon. */
-	poly(points: VecLike[], o?: PaintOptions): void;
-	sprite(name: string, o?: PaintOptions & {
-		frame?: number;
-		width?: number;
-		height?: number;
-		flipX?: boolean;
-		rot?: number;
-		crop?: [
-			number,
-			number,
-			number,
-			number
-		];
-	}): void;
-	text(str: string | number, o?: PaintOptions & Partial<TextStyle> & {
-		rot?: number;
-	}): void;
-	/**
-	 * The fast path for swarms. Returns put(x, y, w, h, rot, frame, r, g, b, a), which skips option parsing and color lookup.
-	 * Colors are 0 to 1. Keep one sheet per batch, because each texture change is a draw call.
-	 */
-	quads(name: string): (x: number, y: number, w: number, h: number, rot?: number, frame?: number, cr?: number, cg?: number, cb?: number, ca?: number) => void;
-	/** Clip everything drawn inside fn to a rectangle in view units, for scrolling lists and panels. */
-	clip(x: number, y: number, w: number, h: number, fn: () => void): void;
-	/** @internal Queue a mesh for the 3D pass. */
-	mesh(name: string, world: Float32Array, o: {
-		size: Vec;
-		color: Color;
-		texture?: string | null;
-		unlit?: boolean;
-		castShadow?: boolean;
-		shine?: number;
-	}): void;
-	/** @internal */
-	billboard(name: string, e: Entity, o: {
-		frame: number;
-		color: Color;
-		unlit: boolean;
-	}): void;
-}
-export interface Component {
-	/** Unique per entity; used for get()/has() and for `requires`. */
-	id?: string;
-	/** Component ids that must also be on the entity. */
-	requires?: string[];
-	/** Runs while the component list is applied, in order, before any add(). */
-	setup?(e: Entity): void;
-	/** Runs once the entity is fully built and in the scene. */
-	add?(e: Entity): void;
-	/** Runs once per fixed step. `this` is the entity; use the second argument in arrow functions. */
-	update?(dt: number, e: Entity): void;
-	/** Runs every rendered frame, in local coordinates: (0,0) is the entity's centre. */
-	draw?(d: Draw, e: Entity): void;
-	/** Runs when the entity is destroyed. */
-	destroy?(e: Entity): void;
-	/** Any other key becomes a field or method on the entity. */
-	[key: string]: any;
-}
-export type CompList = (Component | string | null | undefined | false)[];
-export declare class Entity {
-	readonly scene: Scene;
-	readonly id: number;
-	name: string;
-	readonly tags: Set<string>;
-	parent: Entity | null;
-	children: Entity[];
-	alive: boolean;
-	/** Skips drawing, and collisions too. */
-	hidden: boolean;
-	/** Skips update hooks. */
-	paused: boolean;
-	/** Screen space: ignores the camera and draws above the world. */
-	ui: boolean;
-	/** Draw order within 2D; higher is on top. */
-	layer: number;
-	opacity: number;
-	/** 2 or 3. Set automatically by whatever draws or collides. */
-	dim: 2 | 3;
-	/** Local unscaled size used for bounds, colliders and hit tests. */
-	readonly size: Vec;
-	collider: any;
-	body: any;
-	tappable: {
-		pad: number;
-	} | null;
-	/** Render-interpolated world matrix. */
-	readonly world: Mat4;
-	_prevPos: Vec;
-	_prevRot: Vec;
-	_order: number;
-	_opacity: number;
-	_pressed: boolean;
-	_bornStep: number;
-	_hooksUpdate: [
-		Component,
-		NonNullable<Component["update"]>
-	][];
-	_hooksDraw: [
-		Component,
-		NonNullable<Component["draw"]>
-	][];
-	private _comps;
-	private _listeners;
-	private _pos;
-	private _rot;
-	private _scale;
-	private _color;
-	[key: string]: any;
-	constructor(scene: Scene);
-	get pos(): Vec;
-	set pos(v: VecLike);
-	/** Euler rotation in radians. In 2D use rot.z or the `angle` shortcut. */
-	get rot(): Vec;
-	set rot(v: VecLike);
-	get angle(): number;
-	set angle(a: number);
-	get scale(): Vec;
-	set scale(v: number | VecLike);
-	get color(): Color;
-	set color(c: ColorLike);
-	/** Readable identity for logs, errors and state dumps. */
-	get label(): string;
-	/** @internal Apply a component list. */
-	_use(list: CompList): Component[];
-	private _attach;
-	/** Add a component after creation. */
-	use(c: Component): this;
-	has(id: string): boolean;
-	/** The component object with this id, or undefined. */
-	get(id: string): Component | undefined;
-	is(tag: string): boolean;
-	tag(t: string): this;
-	untag(t: string): this;
-	on(event: string, fn: (...a: any[]) => void): () => boolean;
-	emit(event: string, ...args: any[]): void;
-	/** Run fn when this collides with something; pass a tag to filter. Args: (other, hit). */
-	onCollide(tag: string | ((o: Entity, h: any) => void), fn?: (o: Entity, h: any) => void): () => boolean;
-	onCollideEnd(tag: string, fn: (o: Entity) => void): () => boolean;
-	onTap(fn: () => void): () => boolean;
-	onUpdate(fn: (dt: number, e: Entity) => void): () => void;
-	/** Add a child whose transform is relative to this entity. */
-	child(list: CompList): Entity;
-	/** A timer cancelled automatically when this entity is destroyed. */
-	wait(seconds: number, fn: () => void): TimerHandle;
-	every(seconds: number, fn: () => void): TimerHandle;
-	/** Turn to face a point: yaw and pitch in 3D, angle in 2D. */
-	lookAt(target: VecLike): this;
-	/** Local forward: +x rotated by angle in 2D, -z rotated by yaw and pitch in 3D. */
-	forward(): Vec;
-	/** Move without render interpolation, so a respawn doesn't streak across the screen. */
-	teleport(x: number | VecLike, y?: number, z?: number): this;
-	private _localMatrix;
-	/** @internal Current (non-interpolated) world matrix. */
-	_worldMatrix(): Mat4;
-	worldPos(): Vec;
-	/** Destroy this entity and its children at the end of the step. */
-	destroy(): void;
-}
 export interface FollowOptions {
 	speed?: number;
 	offset?: VecLike;
@@ -1087,6 +890,218 @@ export declare class Scene {
 	_render(alpha: number, d: Draw): void;
 	private drawDebug;
 }
+export interface Component {
+	/** Unique per entity; used for get()/has() and for `requires`. */
+	id?: string;
+	/** Component ids that must also be on the entity. */
+	requires?: string[];
+	/** Runs while the component list is applied, in order, before any add(). */
+	setup?(e: Entity): void;
+	/** Runs once the entity is fully built and in the scene. */
+	add?(e: Entity): void;
+	/** Runs once per fixed step. `this` is the entity; use the second argument in arrow functions. */
+	update?(dt: number, e: Entity): void;
+	/** Runs every rendered frame, in local coordinates: (0,0) is the entity's centre. */
+	draw?(d: Draw, e: Entity): void;
+	/** Runs when the entity is destroyed. */
+	destroy?(e: Entity): void;
+	/** Any other key becomes a field or method on the entity. */
+	[key: string]: any;
+}
+export type CompList = (Component | string | null | undefined | false)[];
+export declare class Entity {
+	readonly scene: Scene;
+	readonly id: number;
+	name: string;
+	readonly tags: Set<string>;
+	parent: Entity | null;
+	children: Entity[];
+	alive: boolean;
+	/** Skips drawing, and collisions too. */
+	hidden: boolean;
+	/** Skips update hooks. */
+	paused: boolean;
+	/** Screen space: ignores the camera and draws above the world. */
+	ui: boolean;
+	/** Draw order within 2D; higher is on top. */
+	layer: number;
+	opacity: number;
+	/** 2 or 3. Set automatically by whatever draws or collides. */
+	dim: 2 | 3;
+	/** Local unscaled size used for bounds, colliders and hit tests. */
+	readonly size: Vec;
+	collider: any;
+	body: any;
+	tappable: {
+		pad: number;
+	} | null;
+	/** Render-interpolated world matrix. */
+	readonly world: Mat4;
+	_prevPos: Vec;
+	_prevRot: Vec;
+	_order: number;
+	_opacity: number;
+	_pressed: boolean;
+	_bornStep: number;
+	_hooksUpdate: [
+		Component,
+		NonNullable<Component["update"]>
+	][];
+	_hooksDraw: [
+		Component,
+		NonNullable<Component["draw"]>
+	][];
+	private _comps;
+	private _listeners;
+	private _pos;
+	private _rot;
+	private _scale;
+	private _color;
+	[key: string]: any;
+	constructor(scene: Scene);
+	get pos(): Vec;
+	set pos(v: VecLike);
+	/** Euler rotation in radians. In 2D use rot.z or the `angle` shortcut. */
+	get rot(): Vec;
+	set rot(v: VecLike);
+	get angle(): number;
+	set angle(a: number);
+	get scale(): Vec;
+	set scale(v: number | VecLike);
+	get color(): Color;
+	set color(c: ColorLike);
+	/** Readable identity for logs, errors and state dumps. */
+	get label(): string;
+	/** @internal Apply a component list. */
+	_use(list: CompList): Component[];
+	private _attach;
+	/** Add a component after creation. */
+	use(c: Component): this;
+	has(id: string): boolean;
+	/** The component object with this id, or undefined. */
+	get(id: string): Component | undefined;
+	is(tag: string): boolean;
+	tag(t: string): this;
+	untag(t: string): this;
+	on(event: string, fn: (...a: any[]) => void): () => boolean;
+	emit(event: string, ...args: any[]): void;
+	/** Run fn when this collides with something; pass a tag to filter. Args: (other, hit). */
+	onCollide(tag: string | ((o: Entity, h: any) => void), fn?: (o: Entity, h: any) => void): () => boolean;
+	onCollideEnd(tag: string, fn: (o: Entity) => void): () => boolean;
+	onTap(fn: () => void): () => boolean;
+	onUpdate(fn: (dt: number, e: Entity) => void): () => void;
+	/** Add a child whose transform is relative to this entity. */
+	child(list: CompList): Entity;
+	/** A timer cancelled automatically when this entity is destroyed. */
+	wait(seconds: number, fn: () => void): TimerHandle;
+	every(seconds: number, fn: () => void): TimerHandle;
+	/** Turn to face a point: yaw and pitch in 3D, angle in 2D. */
+	lookAt(target: VecLike): this;
+	/** Local forward: +x rotated by angle in 2D, -z rotated by yaw and pitch in 3D. */
+	forward(): Vec;
+	/** Move without render interpolation, so a respawn doesn't streak across the screen. */
+	teleport(x: number | VecLike, y?: number, z?: number): this;
+	private _localMatrix;
+	/** @internal Current (non-interpolated) world matrix. */
+	_worldMatrix(): Mat4;
+	worldPos(): Vec;
+	/** Destroy this entity and its children at the end of the step. */
+	destroy(): void;
+}
+export interface PaintOptions {
+	x?: number;
+	y?: number;
+	color?: ColorLike;
+	opacity?: number;
+}
+export interface DrawnText {
+	text: string;
+	x0: number;
+	y0: number;
+	x1: number;
+	y1: number;
+	size: number;
+	hidden: boolean;
+}
+export declare class Draw {
+	private game;
+	private m;
+	private alpha;
+	private stack;
+	/** @internal Text drawn this frame, in view units, for the layout audit. Null when not recording. */
+	texts: DrawnText[] | null;
+	/** @internal The camera while drawing world entities, so recorded text lands in view units. */
+	camera: Camera2D | null;
+	private colors;
+	constructor(game: Game);
+	private get r();
+	private paint;
+	/** @internal */
+	begin(e: Entity): void;
+	/** @internal Back to an untransformed, fully opaque state. */
+	reset(): void;
+	/** Save the transform. Pair with pop(). */
+	push(): void;
+	pop(): void;
+	translate(x: number, y: number): void;
+	rotate(angle: number): void;
+	scale(x: number, y?: number): void;
+	/** Everything drawn inside fn adds light instead of covering what's behind it: glows, sparks, lasers. */
+	additive(fn: () => void): void;
+	/** A rectangle's box in view units. */
+	private box;
+	rect(w: number, h: number, o?: PaintOptions & {
+		radius?: number;
+		outline?: number;
+	}): void;
+	circle(radius: number, o?: PaintOptions & {
+		outline?: number;
+	}): void;
+	/** A line between two local points. */
+	line(a: VecLike, b: VecLike, o?: PaintOptions & {
+		width?: number;
+	}): void;
+	/** A filled convex polygon. */
+	poly(points: VecLike[], o?: PaintOptions): void;
+	sprite(name: string, o?: PaintOptions & {
+		frame?: number;
+		width?: number;
+		height?: number;
+		flipX?: boolean;
+		rot?: number;
+		crop?: [
+			number,
+			number,
+			number,
+			number
+		];
+	}): void;
+	text(str: string | number, o?: PaintOptions & Partial<TextStyle> & {
+		rot?: number;
+	}): void;
+	/**
+	 * The fast path for swarms. Returns put(x, y, w, h, rot, frame, r, g, b, a), which skips option parsing and color lookup.
+	 * Colors are 0 to 1. Keep one sheet per batch, because each texture change is a draw call.
+	 */
+	quads(name: string): (x: number, y: number, w: number, h: number, rot?: number, frame?: number, cr?: number, cg?: number, cb?: number, ca?: number) => void;
+	/** Clip everything drawn inside fn to a rectangle in view units, for scrolling lists and panels. */
+	clip(x: number, y: number, w: number, h: number, fn: () => void): void;
+	/** @internal Queue a mesh for the 3D pass. */
+	mesh(name: string, world: Float32Array, o: {
+		size: Vec;
+		color: Color;
+		texture?: string | null;
+		unlit?: boolean;
+		castShadow?: boolean;
+		shine?: number;
+	}): void;
+	/** @internal */
+	billboard(name: string, e: Entity, o: {
+		frame: number;
+		color: Color;
+		unlit: boolean;
+	}): void;
+}
 export interface TouchButton {
 	action: string;
 	label?: string;
@@ -1202,11 +1217,14 @@ export declare class Game {
 	letterbox: Color;
 	/** @internal */
 	_alpha: number;
+	/** @internal Record drawn text in real browsers too, for pogo shot --audit. */
+	_recordText: boolean;
 	/** How far the current frame sits between the last two steps, 0 to 1, for smoothing custom draws. */
 	get alpha(): number;
 	private _mouseLook;
 	private scenes;
-	private draw;
+	/** @internal */
+	draw: Draw;
 	private screen;
 	private canvas;
 	private currentArgs;

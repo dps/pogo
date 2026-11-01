@@ -46,6 +46,36 @@ export function clearRun() { G.run = null; G.game.save("hexcards-run", null); }
 export function route(args) { saveRun(); G.overlay = null; G.routing = true; G.game.go(G.run.screen, args, { fade: 0.22 }); }
 export const song = (n) => playSong(G.game, n);
 
+// ---- Measured text: every label gets a box, and shrinks or trims to stay inside it ----
+const fits = new Map();
+const style = (size, bold, maxWidth) => ({ size, font: FONT, bold: !!bold, align: "center", maxWidth, lineHeight: 1.25 });
+export const measure = (str, size, bold, maxW = 0) => G.game.renderer.measureText(String(str), style(size, bold, maxW));
+/** The smallest size a phone can read: 11 CSS px, in view units. */
+export const minText = () => Math.ceil(11 / G.game.view.scale * 10) / 10;
+/** Largest size from `size` down to minText at which str fits w x h. Trims with an ellipsis as a last resort. */
+export function fit(str, w, h, size = 15, bold = false) {
+    str = String(str);
+    const min = Math.min(size, minText()), key = `${str}|${w | 0}|${h | 0}|${size}|${bold}|${min}`;
+    let f = fits.get(key);
+    if (f) return f;
+    let s = size, t = str;
+    for (; s >= min; s -= 0.5) { const m = measure(t, s, bold, w); if (m.height <= h && m.width <= w) { f = { text: t, size: s }; break; } }
+    if (!f) {
+        const words = str.split(" ");
+        while (words.length > 1) { words.pop(); t = `${words.join(" ")}…`; const m = measure(t, min, bold, w); if (m.height <= h && m.width <= w) break; }
+        f = { text: t, size: min };
+    }
+    fits.set(key, f);
+    if (fits.size > 900) fits.delete(fits.keys().next().value);
+    return f;
+}
+/** Draw str centred in the box at (x, y) of size w x h. */
+export function label(d, str, x, y, w, h, o = {}) {
+    const f = fit(str, w, h, o.size ?? 15, o.bold);
+    d.text(f.text, { x, y, size: f.size, bold: o.bold, font: FONT, color: o.color ?? COLORS.cream, opacity: o.opacity, maxWidth: w, align: "center", lineHeight: 1.25 });
+    return f;
+}
+
 // ---- Buttons ----
 /** A brass-trimmed button entity. Goes through Pogo's tap system, so pogo check can press it. */
 export function spellBtn(label, o = {}) {
@@ -54,7 +84,7 @@ export function spellBtn(label, o = {}) {
         id: "spellBtn", buttonLabel: label,
         setup(e) {
             const m = e.scene.game.renderer.measureText(label, { size, font: FONT, bold: true, align: "center", maxWidth: 0, lineHeight: 1.2 });
-            e.size.set(o.width ?? Math.max(m.width + 40, 120), o.height ?? 48, 0);
+            e.size.set(o.width ?? Math.max(m.width + 40, 120), o.height ?? 48, 0); e.note = o.note;
             e.tappable = { pad: 0 }; e._isButton = true; e.txt = label; const v = e.scene.view; e.pos.set(v.width / 2, v.height / 2);
             e.on("tap", () => { if (G.overlay || G.routing) return; if (e.disabled) { G.snd.deny(); return; } if (!o.quiet) G.snd.pick(); o.onTap?.(); });
         },
@@ -69,8 +99,9 @@ export function spellBtn(label, o = {}) {
             d.rect(w + 2, h + 2, { color: e.disabled ? "#6a6278" : "#e7b75e", radius: r + 1 });
             d.rect(w - 2, h - 2, { color: c, radius: r - 1 });
             d.rect(w - 10, h * 0.42, { y: -h * 0.22, color: "#ffffff", opacity: 0.14, radius: r - 3 });
-            d.text(e.txt ?? label, { size, bold: true, font: FONT, y: 1.5, color: "#1b1030", opacity: 0.6 });
-            d.text(e.txt ?? label, { size, bold: true, font: FONT, color: e.disabled ? "#a8a0b8" : (o.textColor ?? "#fff6dc") });
+            const tw = w - 16, hasNote = !!e.note, th = hasNote ? h * 0.5 : h - 6, ty = hasNote ? -h * 0.2 : 0, f = fit(e.txt ?? label, tw, th, size, true);
+            d.text(f.text, { size: f.size, bold: true, font: FONT, y: ty, color: e.disabled ? "#a8a0b8" : (o.textColor ?? "#fff6dc"), maxWidth: tw, align: "center", lineHeight: 1.25 });
+            if (hasNote) { const n = fit(e.note, tw, h * 0.4, o.noteSize ?? 13, false); d.text(n.text, { size: n.size, font: FONT, y: h * 0.25, color: e.disabled ? "#a8a0b8" : "#ffe9c0", maxWidth: tw, align: "center", lineHeight: 1.25 }); }
         },
     };
 }
@@ -86,13 +117,13 @@ export function richLayout(str, size, width, base, bold = false) {
     const stB = { ...st, bold: true };
     const words = [];
     let rest = str;
-    const re = new RegExp(`\\b(${KW.join("|")})\\b`);
+    const re = new RegExp(`\\b(${KW.join("|")})\\b[.,:]?`);
     while (rest.length) {
         const m = re.exec(rest);
         if (!m) { for (const w of rest.split(/(?<=\s)/)) words.push({ t: w }); break; }
         if (m.index > 0) for (const w of rest.slice(0, m.index).split(/(?<=\s)/)) words.push({ t: w });
-        words.push({ t: m[1], kw: m[1] });
-        rest = rest.slice(m.index + m[1].length);
+        words.push({ t: m[0], kw: m[1] });
+        rest = rest.slice(m.index + m[0].length);
     }
     // Numbers read bold and ink-dark, because a card is mostly its numbers.
     const lines = [[]]; let x = 0;
@@ -105,12 +136,12 @@ export function richLayout(str, size, width, base, bold = false) {
         lines[lines.length - 1].push({ t: trimmed, x, w: wd, kw: w.kw, bold: !!(w.kw || isNum) });
         x += wd + (trail ? space : 0);
     }
-    L = { lines: lines.map((l) => { const last = l[l.length - 1], w = last ? last.x + last.w : 0; return { items: l, w }; }), size, lh: size * 1.2 };
+    L = { lines: lines.map((l) => { const last = l[l.length - 1], w = last ? last.x + last.w : 0; return { items: l, w }; }), size, lh: size * 1.3 };
     layouts.set(key, L);
     if (layouts.size > 600) layouts.delete(layouts.keys().next().value);
     return L;
 }
-const KW_DARK = { Ward: "#1f6fb8", Burn: "#d8481e", Chill: "#3a8fc8", Hex: "#8a2fd8", Doom: "#c0235a", Potency: "#a4661a", Reflux: "#128f70", Instant: "#a4661a", Keep: "#3f8f2a", "Boil Away": "#c0401e", Light: "#a4861a", Steam: "#3a7fa8", Heat: "#d0601e", Gunk: "#6a6a3a", First: "#6a4a2a", Last: "#6a4a2a", Simmer: "#c0601e" };
+const KW_DARK = { Block: "#1f6fb8", Burn: "#d8481e", Chill: "#3a8fc8", Hex: "#8a2fd8", Doom: "#c0235a", Power: "#a4661a", Reflux: "#128f70", Instant: "#a4661a", Keep: "#3f8f2a", "Boil Away": "#c0401e", Light: "#a4861a", Steam: "#3a7fa8", Heat: "#d0601e", Gunk: "#6a6a3a", First: "#6a4a2a", Last: "#6a4a2a", Simmer: "#c0601e" };
 export function drawRich(d, L, x, y, o = {}) {
     const dark = o.dark ?? true, base = o.color ?? (dark ? COLORS.ink : COLORS.cream), h = L.lines.length * L.lh, a = o.opacity ?? 1;
     L.lines.forEach((ln, i) => {
@@ -162,39 +193,27 @@ export class Fx {
     }
 }
 
-// ---- Top bar ----
-export function drawHud(d, s, run) {
-    const v = s.view, top = G.game.view.safe.top, W = v.width, sl = G.game.view.safe.left;
-    d.rect(W + 4, 40 + top, { x: W / 2, y: (40 + top) / 2, color: "#120822", opacity: 0.78 });
-    d.rect(W + 4, 1.5, { x: W / 2, y: 40 + top, color: "#e7b75e", opacity: 0.6 });
-    const y = top + 20;
+// ---- Top bar: life, block, gold. Everything else lives behind Deck and the menu. ----
+export const BAR_H = 44;
+export function drawHud(d, s, run, block = 0) {
+    const v = s.view, top = G.game.view.safe.top, W = v.width, sl = G.game.view.safe.left, y = top + BAR_H / 2;
+    d.rect(W + 4, BAR_H + top, { x: W / 2, y: (BAR_H + top) / 2, color: "#120822", opacity: 0.92 });
+    d.rect(W + 4, 1.5, { x: W / 2, y: BAR_H + top, color: "#e7b75e", opacity: 0.6 });
     d.push(); d.translate(sl, 0);
-    d.sprite(`witch_${run.witch}`, { x: 22, y: y + 1, width: 34, height: 43 });
-    const hpW = 74, f = Math.max(0, run.hp / run.maxHp);
-    d.rect(hpW, 14, { x: 46 + hpW / 2, y, color: "#07040f", radius: 7 });
-    d.rect(Math.max(10, (hpW - 2) * f), 12, { x: 47 + (hpW - 2) * f / 2, y, color: f < 0.34 ? "#ff5a5a" : "#e8455c", radius: 6 });
-    d.text(`${run.hp}/${run.maxHp}`, { x: 46 + hpW / 2, y: y + 0.5, size: 12, bold: true, color: "#fff" , font: FONT });
-    d.sprite("glyph_gilt", { x: 136, y, width: 22, height: 22 });
-    d.text(`${run.gold}`, { x: 158, y, size: 14, bold: true, color: COLORS.gold, font: FONT });
-    if (W >= 330) d.text(`Floor ${totalFloor(run)}`, { x: 214, y, size: 12, color: COLORS.dim, font: FONT });
+    d.sprite(`witch_${run.witch}`, { x: 24, y: y + 1, width: 32, height: 41 });
+    const hpW = 84, f = Math.max(0, run.hp / run.maxHp), mt = Math.max(11, minText());
+    d.rect(hpW, 18, { x: 46 + hpW / 2, y, color: "#07040f", radius: 9 });
+    if (f > 0) d.rect(Math.max(12, (hpW - 2) * f), 16, { x: 47 + (hpW - 2) * f / 2, y, color: f < 0.34 ? "#ff5a5a" : "#d8364f", radius: 8 });
+    d.text(`${run.hp}/${run.maxHp}`, { x: 46 + hpW / 2, y, size: mt + 1, bold: true, color: "#fff", font: FONT });
+    let x = 148;
+    if (block > 0) { d.sprite("wardicon", { x, y, width: 34, height: 34 }); d.text(fmt(block), { x, y: y - 2, size: mt, bold: true, font: FONT, color: "#07203f" }); }
+    x += 26;
+    d.sprite("glyph_gilt", { x, y, width: 20, height: 20 });
+    d.text(`${run.gold}`, { x: x + 12 + measure(run.gold, 14, true).width / 2, y, size: 14, bold: true, color: COLORS.gold, font: FONT });
     d.pop();
 }
-export const TOP = 44;
 /** The HUD lives below the button layer, so buttons stay on top of its bar. */
-export const hudEntity = (s, getRun, extra) => s.add([ui(), layer(-10), { draw(d) { drawHud(d, s, getRun()); extra?.(d); } }]);
-
-/** Tappable strip of trinkets along the top. Returns hit boxes. */
-export function drawTrinkets(d, s, run, y) {
-    const sl = G.game.view.safe.left, W = s.view.width - sl, n = run.trinkets.length, size = 26, gap = Math.min(30, (W - 60) / Math.max(1, n)), boxes = [];
-    run.trinkets.forEach((id, i) => {
-        const x = 18 + sl + i * gap;
-        d.sprite(trArt(id), { x, y, width: size, height: size });
-        boxes.push({ id, x, y, r: 14 });
-    });
-    return boxes;
-}
-let trArt = (id) => id;
-export const setTrArt = (fn) => { trArt = fn; };
+export const hudEntity = (s, getRun, extra, getBlock) => s.add([ui(), layer(-10), { draw(d) { drawHud(d, s, getRun(), getBlock?.() ?? 0); extra?.(d); } }]);
 export const tapBox = (x, y, b) => Math.hypot(x - b.x, y - b.y) <= b.r + 4;
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);

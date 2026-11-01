@@ -135,6 +135,23 @@ export function audit(g: Game): AuditIssue[] {
         if (ox > 2 && oy > 2) add("warn", "UI_OVERLAP", `${a.e.label} and ${b.e.label} overlap.`, "Lay them out from view.width/height so they don't collide on small screens.");
     }
 
+    // Text from custom draw hooks as well as text() entities: this is what players actually see collide.
+    const drawn = (g.draw.texts ?? []).filter((t) => !t.hidden && t.x1 > 0 && t.y1 > 0 && t.x0 < v.width && t.y0 < v.height);
+    for (let i = 0; i < drawn.length; i++) {
+        const a = drawn[i], q = (t: string) => JSON.stringify(t.length > 28 ? `${t.slice(0, 25)}...` : t);
+        const cut = a.x0 < -2 || a.x1 > v.width + 2 || a.y0 < -2 || a.y1 > v.height + 2;
+        if (cut) add("warn", "TEXT_CUT_OFF", `${q(a.text)} runs off the screen.`, "Set maxWidth, shrink it, or lay it out from view.width.");
+        if (a.size * v.scale < MIN_TEXT_CSS) add("warn", "TEXT_TOO_SMALL", `${q(a.text)} renders at ${(a.size * v.scale).toFixed(1)} CSS px.`, `Keep text at ${MIN_TEXT_CSS}px or more on the smallest screen.`);
+        for (let j = i + 1; j < drawn.length; j++) {
+            const b = drawn[j];
+            if (a.text === b.text) continue; // the same string drawn twice is an outline or a shadow
+            const ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+            if (ox <= 2 || oy <= 2) continue;
+            const smaller = Math.min((a.x1 - a.x0) * (a.y1 - a.y0), (b.x1 - b.x0) * (b.y1 - b.y0));
+            if ((ox * oy) / smaller > 0.12) add("warn", "TEXT_OVERLAP", `${q(a.text)} and ${q(b.text)} overlap.`, "Text drawn over text is unreadable. Lay out from measured sizes, reserve space, or hide what's behind.");
+        }
+    }
+
     if (g.input.touchMode) {
         const provided = g.touch.provides, pointer = g.input.used.has("pointer"), hasTaps = live.some((e) => e.tappable);
         for (const action of g.input.used) {

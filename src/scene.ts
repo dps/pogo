@@ -430,6 +430,7 @@ export class Scene {
             }
         };
         r.begin2D(this.cam.matrix(alpha));
+        d.camera = this.cam;
         draw2(list.filter((e) => e.dim === 2 && !e.ui && e._hooksDraw.length).sort(byLayer));
         d.reset();
         for (const p of this.particles) {
@@ -440,6 +441,7 @@ export class Scene {
         for (const fn of this.drawers) fn(d);
         if (g.debug) this.drawDebug(d, list);
 
+        d.camera = null;
         r.begin2D(null);
         draw2(list.filter((e) => e.dim === 2 && e.ui && e._hooksDraw.length).sort(byLayer));
         d.reset();

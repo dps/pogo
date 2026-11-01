@@ -1213,6 +1213,21 @@ function audit(g) {
     const ox = Math.min(a.r.x1, b.r.x1) - Math.max(a.r.x0, b.r.x0), oy = Math.min(a.r.y1, b.r.y1) - Math.max(a.r.y0, b.r.y0);
     if (ox > 2 && oy > 2) add("warn", "UI_OVERLAP", `${a.e.label} and ${b.e.label} overlap.`, "Lay them out from view.width/height so they don't collide on small screens.");
   }
+  const drawn = (g.draw.texts ?? []).filter((t) => !t.hidden && t.x1 > 0 && t.y1 > 0 && t.x0 < v.width && t.y0 < v.height);
+  for (let i = 0; i < drawn.length; i++) {
+    const a = drawn[i], q = (t) => JSON.stringify(t.length > 28 ? `${t.slice(0, 25)}...` : t);
+    const cut = a.x0 < -2 || a.x1 > v.width + 2 || a.y0 < -2 || a.y1 > v.height + 2;
+    if (cut) add("warn", "TEXT_CUT_OFF", `${q(a.text)} runs off the screen.`, "Set maxWidth, shrink it, or lay it out from view.width.");
+    if (a.size * v.scale < MIN_TEXT_CSS) add("warn", "TEXT_TOO_SMALL", `${q(a.text)} renders at ${(a.size * v.scale).toFixed(1)} CSS px.`, `Keep text at ${MIN_TEXT_CSS}px or more on the smallest screen.`);
+    for (let j = i + 1; j < drawn.length; j++) {
+      const b = drawn[j];
+      if (a.text === b.text) continue;
+      const ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+      if (ox <= 2 || oy <= 2) continue;
+      const smaller = Math.min((a.x1 - a.x0) * (a.y1 - a.y0), (b.x1 - b.x0) * (b.y1 - b.y0));
+      if (ox * oy / smaller > 0.12) add("warn", "TEXT_OVERLAP", `${q(a.text)} and ${q(b.text)} overlap.`, "Text drawn over text is unreadable. Lay out from measured sizes, reserve space, or hide what's behind.");
+    }
+  }
   if (g.input.touchMode) {
     const provided = g.touch.provides, pointer = g.input.used.has("pointer"), hasTaps = live.some((e) => e.tappable);
     for (const action of g.input.used) {
@@ -1729,6 +1744,10 @@ var Draw = class {
   m = new Float32Array([1, 0, 0, 1, 0, 0]);
   alpha = 1;
   stack = [];
+  /** @internal Text drawn this frame, in view units, for the layout audit. Null when not recording. */
+  texts = null;
+  /** @internal The camera while drawing world entities, so recorded text lands in view units. */
+  camera = null;
   colors = /* @__PURE__ */ new Map();
   get r() {
     return this.game.renderer;
@@ -1796,8 +1815,24 @@ var Draw = class {
       this.r.blend(false);
     }
   }
+  /** A rectangle's box in view units. */
+  box(x, y, w, h) {
+    const m = this.m, cam = this.camera, sx = Math.hypot(m[0], m[1]), sy = Math.hypot(m[2], m[3]), zoom = cam?.zoom ?? 1;
+    let cx = m[0] * x + m[2] * y + m[4], cy = m[1] * x + m[3] * y + m[5];
+    if (cam) {
+      const p = cam.toView(new Vec(cx, cy));
+      cx = p.x;
+      cy = p.y;
+    }
+    const hw = w * sx * zoom / 2, hh = h * sy * zoom / 2;
+    return { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh };
+  }
   rect(w, h, o = {}) {
     const [r, g, b, a] = this.paint(o.color, o), x = o.x ?? 0, y = o.y ?? 0, hw = w / 2, hh = h / 2, pad = 1.5;
+    if (this.texts?.length && a > 0.9 && !o.outline) {
+      const p = this.box(x, y, w, h);
+      for (const t of this.texts) if (t.x0 >= p.x0 - 1 && t.y0 >= p.y0 - 1 && t.x1 <= p.x1 + 1 && t.y1 <= p.y1 + 1) t.hidden = true;
+    }
     this.r.quad(this.m, x - hw - pad, y - hh - pad, x + hw + pad, y + hh + pad, -hw - pad, -hh - pad, hw + pad, hh + pad, r, g, b, a, null, MODE_SDF, hw, hh, Math.min(o.radius ?? 0, hw, hh), o.outline ?? 0);
   }
   circle(radius, o = {}) {
@@ -1846,6 +1881,11 @@ var Draw = class {
     const style = { size: o.size ?? 20, font: o.font ?? DEFAULT_FONT, bold: o.bold ?? false, align: o.align ?? "center", maxWidth: o.maxWidth ?? 0, lineHeight: o.lineHeight ?? 1.25 };
     const t = this.r.text(String(str), style), x = o.x ?? 0, y = o.y ?? 0;
     const [r, g, b, a] = this.paint(o.color, o);
+    if (this.texts && a > 0.15 && String(str).trim()) {
+      const m = this.m;
+      const size = style.size * Math.hypot(m[2], m[3]) * (this.camera?.zoom ?? 1);
+      this.texts.push({ text: String(str), size, hidden: false, ...this.box(x, y, t.width, Math.max(style.size * 0.7, t.height - style.size * 0.45)) });
+    }
     this.r.quad(this.m, x - t.width / 2, y - t.height / 2, x + t.width / 2, y + t.height / 2, 0, 0, 1, 1, r, g, b, a, t.tex, MODE_TEXTURE, 0, 0, 0, 0);
   }
   /**
@@ -3698,6 +3738,7 @@ var Scene = class {
       }
     };
     r.begin2D(this.cam.matrix(alpha));
+    d.camera = this.cam;
     draw2(list.filter((e) => e.dim === 2 && !e.ui && e._hooksDraw.length).sort(byLayer));
     d.reset();
     for (const p of this.particles) {
@@ -3707,6 +3748,7 @@ var Scene = class {
     }
     for (const fn of this.drawers) fn(d);
     if (g.debug) this.drawDebug(d, list);
+    d.camera = null;
     r.begin2D(null);
     draw2(list.filter((e) => e.dim === 2 && e.ui && e._hooksDraw.length).sort(byLayer));
     d.reset();
@@ -3965,12 +4007,15 @@ var Game = class {
   letterbox;
   /** @internal */
   _alpha = 1;
+  /** @internal Record drawn text in real browsers too, for pogo shot --audit. */
+  _recordText = false;
   /** How far the current frame sits between the last two steps, 0 to 1, for smoothing custom draws. */
   get alpha() {
     return this._alpha;
   }
   _mouseLook = false;
   scenes = /* @__PURE__ */ new Map();
+  /** @internal */
   draw;
   screen;
   canvas = null;
@@ -4121,6 +4166,7 @@ var Game = class {
     const s = this.current;
     if (!s) return;
     this._alpha = alpha;
+    this.draw.texts = this.headless || this._recordText ? [] : null;
     s._render(alpha, this.draw);
     const f = this.fade;
     if (f.phase) {

@@ -1,5 +1,5 @@
 // RAMEN RUSH. Pull, ladle, chop, slide. A cart, a cookbook with missing pages, and a town to feed.
-import { createGame, pin, rect, tap } from "./pogo.js";
+import { createGame, layer, pin, rect, tap, ui } from "./pogo.js";
 import { LOCATIONS, RECIPES, SHIFTS } from "./data.js";
 import { Kitchen, makeKit, menuFor } from "./sim.js";
 import { assisted, finishShift, loadSave, owned, shiftIndex } from "./progress.js";
@@ -54,14 +54,14 @@ game.scene("play", (s, args = {}) => {
     s.onDraw((d) => stage.drawFront(d));
     s.onDrawUI((d) => {
         d.reset();
+        if (paused) return;      // The pause screen is modal: nothing else talks while it's up.
         stage.drawTickets(d); stage.drawHUD(d); stage.drawBubble(d); stage.drawFloats(d); stage.drawHint(d);
         if (intro > 0) {
             const a = Math.min(1, intro * 2.5), L = stage.L;
             d.rect(L.W, 84, { x: L.W / 2, y: L.counter, color: SOY, opacity: a * 0.92 });
             d.text(endless ? "Endless Rush" : `Shift ${i + 1}`, { x: L.W / 2, y: L.counter - 19, size: 15, bold: true, font: FONT, color: GOLD, opacity: a });
-            d.text(endless ? "Three walkouts and we close" : shift.title, { x: L.W / 2, y: L.counter + 10, size: 25, bold: true, font: FONT, color: CREAM, opacity: a });
+            d.text(endless ? "Three walkouts and we close" : shift.title, { x: L.W / 2, y: L.counter + 10, size: endless ? 20 : 25, bold: true, font: FONT, color: CREAM, opacity: a, maxWidth: L.W - 24 });
         }
-        if (paused) { const L = stage.L; d.rect(L.W, L.H, { x: L.W / 2, y: L.H / 2, color: "#160a06", opacity: 0.74 }); d.text("Paused", { x: L.W / 2, y: L.H * 0.3, size: 30, bold: true, font: FONT, color: CREAM }); }
     });
 
     let intro = 1.2;
@@ -70,9 +70,9 @@ game.scene("play", (s, args = {}) => {
         if (intro > 0) { intro -= dt; if (s.input.pointer.pressed) intro = Math.min(intro, 0.2); stage.animate(dt); return; }
         stage.update(dt);
         if (shift.rush && !stage.rushed && k.time > 0 && k.arrivals.length < k.totalCustomers * 0.62) {
-            stage.rushed = 1; stage.banner = { text: "RUSH!", t: 0, life: 1.3, color: GOLD }; R.sound.rush(); R.song("rush");
+            stage.rushed = 1; stage.showBanner("RUSH!", 1.3); R.sound.rush(); R.song("rush");
         }
-        if (endless && !stage.rushed && k.time > 75) { stage.rushed = 1; stage.banner = { text: "RUSH!", t: 0, life: 1.3, color: GOLD }; R.sound.rush(); R.song("rush"); }
+        if (endless && !stage.rushed && k.time > 75) { stage.rushed = 1; stage.showBanner("RUSH!", 1.3); R.sound.rush(); R.song("rush"); }
         if (k.done && stage.endT > 1.25 && !ended) {
             ended = true;
             const news = finishShift(R.save, i, k);
@@ -87,23 +87,28 @@ game.scene("play", (s, args = {}) => {
 
     // Pause: a small tab on the curtain, away from the cooking.
     const pauser = () => [4, 2];
-    s.add([pin("top-right", pauser()), rect(50, 50, { color: "#00000000" }), tap(() => setPause(!paused)), { draw(d) {
+    s.add([pin("top-right", pauser()), rect(50, 50, { color: "#00000000" }), tap(() => setPause(!paused)), { name: "pauseTab", draw(d) {
         d.rect(38, 32, { color: SOY, radius: 11, opacity: 0.92 });
         d.rect(4.5, 15, { x: -5.5, color: CREAM, radius: 2 }); d.rect(4.5, 15, { x: 5.5, color: CREAM, radius: 2 });
     } }]);
     const panel = [];
     function setPause(on) {
-        paused = on; s.paused = on; R.sound.ui();
+        paused = on; s.paused = on; R.sound.ui(); stage.quiet = on;
+        s.first("pauseTab").hidden = on;
         if (on) R.sound.hush();
         for (const e of panel) e.destroy();
         panel.length = 0;
         if (!on) return;
-        const land = game.view.width > game.view.height * 1.05, st = land ? 62 : 0;
-        const add = (label, i, fn, o = {}) => panel.push(s.add([pin("center", land ? [(i - 1) * 170, 0] : [0, -30 + i * 62]), chunky(label, { width: land ? 160 : 210, height: 54, textSize: land ? 15 : 18, ...o, onTap: fn })]));
+        const land = game.view.width > game.view.height * 1.05, st = land ? 62 : 0, V = game.view;
+        panel.push(s.add([ui(), layer(40), { draw(d) {
+            d.rect(V.width * 2, V.height * 2, { x: V.width / 2, y: V.height / 2, color: "#160a06", opacity: 0.93 });
+            d.text("Paused", { x: V.width / 2, y: land ? V.height * 0.22 : V.height / 2 - 100, size: 30, bold: true, font: FONT, color: CREAM });
+        } }]));
+        const add = (label, i, fn, o = {}) => panel.push(s.add([layer(50), pin("center", land ? [(i - 1) * 170, 0] : [0, -30 + i * 62]), chunky(label, { width: land ? 160 : 210, height: 54, textSize: land ? 15 : 18, ...o, onTap: fn })]));
         add("Back to it", 0, () => setPause(false), { color: "#3f7a4e", action: "confirm" });
         add("Start shift again", 1, () => { s.paused = false; game.go("play", args, { fade: 0.2 }); });
         add("To the ledger", 2, () => { s.paused = false; game.go("ledger", {}, { fade: 0.2 }); }, { color: "#7a4a2a" });
-        panel.push(...settingsRow(s, R, "center", land ? st : 160));
+        panel.push(...settingsRow(s, R, "center", land ? st : 160, 50));
     }
     s.on("resize", () => stage.layout());
     s.on("leave", () => R.sound.hush());      // Held sounds never outlive the kitchen.

@@ -101,9 +101,33 @@ Each game has its own copy of `pogo.js`. To upgrade one, copy `dist/pogo.js` and
 
 ## Making your own art
 
-All the art here is made in code, so you don't need image files. You can't see your work directly, so the loop is what matters: **draw, run `pogo shot`, open the image and look at it, then fix it.** Do this at phone and desktop size. If a screenshot wouldn't make someone want to play, the art isn't done.
+You can't see your work directly, so the loop is what matters: **make it, run `pogo shot`, open the image and look at it, then fix it.** Do this at phone and desktop size. If a screenshot wouldn't make someone want to play, the art isn't done.
 
-### Choose a style first
+Choose by what you're making:
+
+| Art | Use |
+|---|---|
+| 2D characters, weapons, items, backgrounds, card art | **Image generation, if you have it.** It's far better than 2D art drawn in code |
+| 3D worlds, objects and characters | Code-built meshes, voxels and lathes, with lighting from the renderer. Generate textures for surface detail |
+| Animation | Puppet rigs, tweens and squash. Generated frames rarely match each other |
+| Icons, UI, particles | Code: they're small, need to be sharp, and must match exactly |
+| No image tool available | Code art, using the styles below |
+
+### Using image generation
+
+Pogo doesn't include a generator, so bring your own, and if you have none, skip to the next section. Keys and generator code never go in a game or this repo: only the finished art does.
+
+1. **Write one style block for the whole game** and put it in every prompt: medium, light direction, palette and mood. Generate one hero image, then pass it as a reference for the rest. This keeps a set looking like a set.
+2. **Ask for a flat key background far from the subject's colors.** Say so forcefully: "completely flat, even, uniform pure magenta, hex FF00FF, edge to edge, no gradient, no vignette, no glow, no shadow, one object only". Generators shade backgrounds anyway if you're vague.
+3. **Keep the subject away from the key color.** Pink sleeves on magenta cut out badly, so use green for pink subjects. Avoid glows and see-through parts: paint glow on the object, or add it in-game with `d.additive`.
+4. **Describe the camera exactly, and pass a reference for it.** A generator will happily draw a weapon side-on, which looks wrong the moment it fires. For first-person weapons ask for the view from behind, "aiming away from the viewer with strong perspective foreshortening", then place the muzzle on a line through the crosshair, as `shooter/game.js` does.
+5. **Clean it up:** `pogo art raw.jpg --out art/hero.js --size 640x480 --anchor bottom-right`. It removes the background, trims, resizes and compresses. Generators often return JPEGs whatever you ask for, and it accepts those. Use `--sheet 4` to pack several into a sprite sheet.
+6. **Load it** with `import hero from "./art/hero.js"`, then `game.assets.image("hero", hero)`. The `.js` form embeds the art, so it keeps working in sandboxed embeds that block separate files, with no asset path to go wrong. Check file sizes: about 50 to 100 KB for a 640x480 sprite is normal.
+7. **Check it on a dark and a bright background, then in the game.** Look for halos, specks and missing parts. A clean cut-out can still be too big, block the crosshair or cover the HUD, so resize it in play. Update anything tied to the old art, like muzzle flash positions.
+
+Don't ask for logos, brands, or named characters from other works, and check your generator's terms. Don't generate text inside images: draw it in the game. `shooter/art/` shows the result, with five generated weapons that took about ten tries to get right.
+
+### Drawing art in code
 
 Pick one style and a palette of 5 to 8 colors before you draw anything. Consistency beats detail, and an obvious style hides limits.
 
@@ -120,6 +144,8 @@ Pick one style and a palette of 5 to 8 colors before you draw anything. Consiste
 | Realistic objects | `assets.lathe` with `shine`, plus `softShadows` | `chess/meshes.js`, `chess/world.js` |
 | Papercraft | Flat-shaded folded meshes | `plane/paper.js` |
 | Puppet characters | Painted parts on a rig | `fight/puppet.js`, `brawl/puppet.js` |
+
+3D scenes tend to look better than code-drawn 2D, because the renderer supplies light, shading and depth. If you have no image tool, consider making 2D screens feel 3D, as `snow`, `chess` and `tactics` do, instead of flat sprites.
 
 ### Rules that make code art look good
 
@@ -229,7 +255,7 @@ Most newer games keep rules in a headless `sim.js` or `engine.js` with no drawin
 
 **`crypt`, Crypt Keeper's Day Off.** Best for quick turn-based dungeon runs. Keepers, monsters, relics and postcards are in `data.js`, floors and dungeons in `floors.js` (`DUNGEONS`, `ITINERARY`), and rules in `sim.js`. Relics can break the guarantee that floors are winnable, so run `tools/bot.mjs` after adding one, plus `tools/rules-test.mjs` and `tools/ramp.mjs`.
 
-**`cards`, Hex & Cards.** Best for deck, hand and combo games. Content is in `data/`: `cards.js`, `enemies.js`, `events.js`, `trinkets.js`, with reactions in `rules.js`. Rules are in `sim.js`, and card art in `art/`. Keep runs seeded. Run `tools/test.mjs`, then `tools/balance.mjs` to find broken or dead cards.
+**`cards`, Hex & Cards.** Best for deck, hand and combo games. Content is in `data/`: `cards.js`, `enemies.js`, `events.js`, `trinkets.js`, with reactions in `rules.js`. Rules are in `sim.js`, and generated and painted art in `art/`. Keep runs seeded. Run `tools/test.mjs`, then `tools/balance.mjs` to find broken or dead cards.
 
 **`autobattle`, Pet Shop Brawl.** Best for build-a-team games. Pets, traits and shops are in `data.js` (`TRAITS`, `SHOPS`), pet art in `art-pets.js`, round economy in `run.js` (`ODDS`, `TUNE`), and fights in `battle.js` and `sim.js`. Opponent teams in `ghosts.js` come from `tools/gen-ghosts.mjs`, so regenerate them after changing pets. Run `tools/balance.mjs`, which reports any dominant or dead trait.
 
@@ -247,7 +273,7 @@ Most newer games keep rules in a headless `sim.js` or `engine.js` with no drawin
 
 **`ramen`, Ramen Rush.** Best for order-rush games. Recipes, toppings, locations, staff, regulars and shifts are in `data.js`, and timing is in `sim.js` (`TUNE`). The cooking actions are in `stage.js`. To make a coffee shop or bakery, replace the steps and art. Run `tools/bot.mjs`.
 
-**`idle`, Cosmic Yard Sale.** Best for number-go-up games. Acts, customers and bylaws are in `data.js` (`ACTS`, `CUSTOMERS`, `BYLAWS`), and the economy is in `econ.js` (`TUNE`, `MILESTONES`). Art is in `art.js`, and the zoomed scales in `world.js`. After any economy change, run `tools/sim.mjs`, which checks pacing across player types, then `tools/bot.mjs`.
+**`idle`, Cosmic Yard Sale.** Best for number-go-up games. Acts, customers and bylaws are in `data.js` (`ACTS`, `CUSTOMERS`, `BYLAWS`), and the economy is in `econ.js` (`TUNE`, `MILESTONES`). Generated art is in `art/`, loaded by `art.js`, and the zoomed scales are in `world.js`. After any economy change, run `tools/sim.mjs`, which checks pacing across player types, then `tools/bot.mjs`.
 
 **`beat`, Beat Goblin.** Best for anything timed to music. Songs are in `music/songs.js`, charts in `charts.js` (`CHARTS`), the tour in `story.js`, and hit windows in `engine.js` (`WINDOWS`). Never time gameplay from steps. Run `tools/verify-songs.mjs` and `tools/verify-charts.mjs`.
 
@@ -259,7 +285,8 @@ Don't report a game as finished until all of these hold, and say which you could
 
 - `pogo check game.js` passes, and again with `--scene` on real gameplay. It only reaches menus otherwise.
 - The game's own bots and test tools pass. A test that fails under heavy machine load must be rerun alone before you dismiss it.
-- You opened `pogo shot` images at `phone`, `phone-landscape` and `desktop`, on the title, gameplay and end screens.
+- You opened `pogo shot` images at `phone`, `phone-landscape` and `desktop`, on the title, gameplay and end screens, and added `--audit` to each. No `TEXT_OVERLAP` or `TEXT_CUT_OFF` remains. Floating text and speech bubbles must not cover the thing the player is using.
+- A stranger can play it. The first minute teaches every core action by making the player do it, and a new mechanic is shown before it matters. Rules described only in text don't count.
 - It has no console errors in real Chrome, and still runs in a sandboxed iframe with storage, audio and gamepads blocked.
 - No names, art or text from the template remain unless you meant to keep them.
 
@@ -273,7 +300,8 @@ Install Node 24 or later, then run `npm install && npm run build` once. Games th
 pogo list [search]                 # the catalogue, e.g. pogo list racing
 pogo new games/mygame --from kart  # fork a game; omit --from for a blank one
 pogo check games/mygame/game.js    # headless play on five screens
-pogo shot games/mygame --device desktop --out s.png
+pogo shot games/mygame --device desktop --out s.png --audit
+pogo art raw.jpg --out art/hero.js --size 640x480   # clean up a generated image
 pogo serve games/mygame
 ```
 

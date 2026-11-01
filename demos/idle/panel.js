@@ -50,53 +50,42 @@ export function drawHUD(d, G) {
     // Where we are, and how far to the next venue.
     const y = top + 66, bw = Math.min(P.w - 28, 330), bx = cx - bw / 2;
     if (S.ready && E.act(S).move) {
-        btn(d, G, "move", `MOVE TO ${E.act(S).move}`, cx, y + 8, Math.min(P.w - 24, 300), 40, () => G.open("move"), { pulse: true, color: C.coral, sub: "MOVING DAY: NEW VENUE, NEW RULES", size: 13 });
+        btn(d, G, "move", `MOVE TO ${E.act(S).move}`, cx, y, Math.min(P.w - 24, 300), 26, () => G.open("move"), { pulse: true, color: C.coral, size: 12 });
     } else {
         const A0 = E.act(S), pr = E.progress(S);
         d.rect(bw + 6, 16, { x: cx, y, color: C.ink, radius: 8, opacity: 0.86 });
         if (pr > 0.004) d.rect(Math.max(10, bw * pr), 10, { x: bx + (Math.max(10, bw * pr)) / 2, y, color: A0.move ? C.teal : C.coral, radius: 5 });
         T(d, A0.stops[S.stop].scale, cx, y, 9.5, { color: C.paper, maxW: bw - 12 });
-        if (A.nextNote > 0) T(d, A0.move ? `NEXT: ${A0.move}` : "LAST STOP", cx, y + 15, 8.5, { color: C.paper, outline: C.ink, opacity: Math.min(1, A.nextNote) });
     }
-    // Hype.
+    // Hype lives in the left edge, clear of the gutter text.
+    const M = metrics(G);
     if (E.hypeOn(S) && !S.ended) {
-        const hx = P.x + 18, hh = Math.min(150, P.h * 0.32), hy = P.h * 0.2 + hh / 2 + 8;
-        d.rect(16, hh + 6, { x: hx, y: hy, color: C.ink, radius: 8, opacity: 0.9 });
-        const v = S.frenzy > 0 ? S.frenzy / (E.TUNE.frenzySecs * (E.has(S, "patience") ? 2 : 1)) : S.hype;
-        if (v > 0.02) d.rect(10, hh * v, { x: hx, y: hy + hh / 2 - (hh * v) / 2, color: S.frenzy > 0 ? "#fff09a" : S.hype >= 1 ? C.gold : C.coral, radius: 5 });
-        T(d, "HYPE", hx, hy - hh / 2 - 12, 8, { color: C.paper, outline: C.ink });
-        if (S.hype >= 1 && S.frenzy <= 0) {
-            const M = metrics(G), bx2 = P.x + 62, by = hy + 28, k = (G.armed === "frenzy" ? 0.92 : 1) * (1 + Math.sin(G.time * 8) * 0.05);
-            d.push(); d.translate(bx2, by); d.scale(k, k); d.rotate(Math.sin(G.time * 3) * 0.06);
-            d.sprite("burst", { width: 112, height: 112, color: C.ink }); d.sprite("burst", { width: 102, height: 102, color: sticker(G) });
-            T(d, "EVERYTHING", 0, -14, 9.5, { color: C.paper, maxW: 74 }); T(d, "MUST", 0, 0, 10, { color: C.paper }); T(d, "GO!", 0, 16, 16, { color: "#fff09a" });
-            d.pop();
-            hit(G, "frenzy", bx2 - 54, by - 54, 108, 108, () => G.goFrenzy(), 1);
-        }
+        const hx = P.x + 15, hh = Math.max(50, M.gBot - M.gTop), hy = M.gTop + hh / 2;
+        d.rect(14, hh, { x: hx, y: hy, color: C.ink, radius: 7, opacity: 0.9 });
+        const v = S.frenzy > 0 ? S.frenzy / (E.TUNE.frenzySecs * (E.has(S, "patience") ? 2 : 1)) : S.hype, fill = (hh - 6) * v;
+        if (v > 0.02) d.rect(8, fill, { x: hx, y: hy + (hh - 6) / 2 - fill / 2, color: S.frenzy > 0 ? "#fff09a" : S.hype >= 1 ? C.gold : C.coral, radius: 4 });
     }
     // Rival.
-    if (S.act === 2) drawGary(d, G, top);
+    if (S.act === 2) drawGary(d, G, M);
     // Week.
     if (E.weekOn(S) && !S.ended) {
-        const days = E.weekDays(S), today = E.today(S), cw = Math.min(30, (P.w - 44) / 7), wy = top + 92, x0 = cx - (cw * days.length) / 2 + cw / 2;
+        const days = E.weekDays(S), today = E.today(S), cw = Math.min(30, (P.w - 44) / 7), wy = M.ruleY + 8, x0 = cx - (cw * days.length) / 2 + cw / 2;
         days.forEach((day, i) => { const on = day === today; d.rect(cw - 3, 20, { x: x0 + i * cw, y: wy, color: on ? C.gold : C.ink, radius: 5, opacity: on ? 1 : 0.8 }); T(d, day.name.slice(0, 2), x0 + i * cw, wy, 8.5, { color: on ? C.ink : C.paper }); });
-        if (today) note(d, G, today.note, cx, wy + 18, 11, P.w - 60, C.paper, { center: true, middle: true });
+        if (today) T(d, today.note, cx, wy + 19, 8.5, { color: C.paper, outline: C.ink, maxW: P.w - 24 });
     }
     // Stray sticker.
     if (A.stray) {
-        const st = A.stray, k = 1 + Math.sin(G.time * 5) * 0.08;
+        const st = A.stray, k = 0.8 + Math.sin(G.time * 5) * 0.06; st.x = (M.gR[0] + M.gR[1]) / 2; st.y = M.gTop + M.rowH * 2.5;
         d.push(); d.translate(st.x, st.y); d.rotate(Math.sin(G.time * 2) * 0.4); d.scale(k, k);
         d.additive(() => d.sprite("glow", { width: 90, height: 90, color: C.gold, opacity: 0.6 }));
         d.sprite("burst", { width: 58, height: 58, color: C.ink }); d.sprite("burst", { width: 52, height: 52, color: C.gold }); T(d, "50%", 0, -5, 11, { color: C.ink }); T(d, "OFF", 0, 7, 9, { color: C.ink }); d.pop();
         hit(G, "stray", st.x - 34, st.y - 34, 68, 68, () => G.claimStray(), 1);
     }
-    // Haggle.
-    if (S.cust && !S.cust.final && A.cust && !A.cust.leaving && A.cust.arrived) drawHaggle(d, G);
-    drawBubble(d, G);
-    drawBanners(d, G);
+    drawActions(d, G, M);
+    drawLane(d, G, M);
 }
 function drawTitle(d, G, top) {
-    const { A } = G, P = G.pane, cx = P.x + P.w / 2, a = A.title, M = metrics(G), w = Math.min(P.w - 26, 350), h = Math.min(w * 0.42, M.yTop - M.itemS - top - 30), y = top + 12 + h / 2 - (1 - a) * 240, sway = Math.sin(G.time * 0.9) * 0.012;
+    const { A } = G, P = G.pane, cx = P.x + P.w / 2, a = A.title, M = metrics(G), w = Math.min(P.w - 26, 350), h = Math.min(w * 0.42, M.yTop - M.tw * 0.7 - top - 14), y = top + 12 + h / 2 - (1 - a) * 240, sway = Math.sin(G.time * 0.9) * 0.012;
     d.push(); d.translate(cx, y); d.rotate(-0.02 + sway);
     d.line([-w * 0.32, -h / 2 + 2], [-w * 0.3, -h / 2 - 90], { width: 2.5, color: C.ink }); d.line([w * 0.32, -h / 2 + 2], [w * 0.3, -h / 2 - 90], { width: 2.5, color: C.ink });
     d.rect(w, h, { x: 3, y: 5, color: C.ink, radius: 7 }); d.rect(w, h, { color: "#e4b679", radius: 7 }); d.rect(w - 12, h - 12, { color: "#f0c992", radius: 3 });
@@ -105,62 +94,57 @@ function drawTitle(d, G, top) {
     d.sprite("burst", { x: w * 0.36, y: -h * 0.26, width: h * 0.52, height: h * 0.52, color: C.ink }); d.sprite("burst", { x: w * 0.36, y: -h * 0.26, width: h * 0.46, height: h * 0.46, color: C.gold, rot: G.time * 0.2 });
     T(d, "50¢", w * 0.36, -h * 0.26, h * 0.13, { color: C.ink, rot: 0.2 });
     d.pop();
-    const b = Math.abs(Math.sin(G.time * 4)) * 8, ty = P.h > P.w ? M.yFeet + 74 : M.yFeet + 46;
+    const b = Math.abs(Math.sin(G.time * 4)) * 8, ty = M.rowY;
     T(d, "TAP THE TABLE", cx, ty - b * 0.4, 24, { color: C.paper, outline: C.ink, maxW: P.w - 50, opacity: a });
-    d.poly([[cx - 12, ty - 22 - b], [cx + 12, ty - 22 - b], [cx, ty - 36 - b]], { color: C.paper, opacity: a });
 }
-function drawGary(d, G, top) {
-    const { S, A } = G, P = G.pane, cx = P.x + P.w / 2, y = top + 96, g = S.gary;
+function drawGary(d, G, M) {
+    const { S } = G, P = G.pane, cx = P.x + P.w / 2, y = M.ruleY + 2, g = S.gary;
     if (g.war) {
         const w = g.war, bw = Math.min(P.w - 44, 300), bx = cx - bw / 2;
-        T(d, "BIDDING WAR!", cx, y - 4, 16, { color: C.gold, outline: C.ink });
-        d.rect(bw + 6, 22, { x: cx, y: y + 18, color: C.ink, radius: 10 }); d.rect(bw, 16, { x: cx, y: y + 18, color: C.orange, radius: 8 });
-        d.rect(Math.max(10, bw * Math.min(1, w.bar)), 16, { x: bx + (Math.max(10, bw * Math.min(1, w.bar))) / 2, y: y + 18, color: C.teal, radius: 8 });
-        T(d, `TAP TAP TAP!  ${Math.ceil(w.t)}`, cx, y + 42, 13, { color: C.paper, outline: C.ink });
+        d.rect(bw + 6, 16, { x: cx, y: y + 8, color: C.ink, radius: 8 }); d.rect(bw, 10, { x: cx, y: y + 8, color: C.orange, radius: 5 });
+        d.rect(Math.max(10, bw * Math.min(1, w.bar)), 10, { x: bx + (Math.max(10, bw * Math.min(1, w.bar))) / 2, y: y + 8, color: C.teal, radius: 5 });
+        T(d, `BIDDING WAR!  TAP TAP TAP  ${Math.ceil(w.t)}`, cx, y + 25, 10, { color: C.gold, outline: C.ink, maxW: P.w - 30 });
     } else if (E.garyActive(S)) {
-        const bw = 5, pipY = y;
-        T(d, "GARY'S TENTS", cx, pipY - 6, 8.5, { color: C.paper, outline: C.ink });
-        for (let i = 0; i < 5; i++) { const on = i >= g.wins; d.rect(18, 10, { x: cx + (i - 2) * 21, y: pipY + 7, color: on ? C.orange : C.ink, radius: 3, opacity: on ? 1 : 0.5 }); }
-        if (E.garyReady(S)) {
-            btn(d, G, "war", "BID WAR", cx - 62, y + 34, 112, 34, () => G.goWar(), { color: C.coral, size: 13, pulse: true });
-            const c = E.garyPayoff(S);
-            btn(d, G, "pay", "BUY HIM OFF", cx + 62, y + 34, 112, 34, S.cash >= c ? () => { if (E.payGary(S)) G.snd.deal(); } : null, { color: S.cash >= c ? C.teal : C.steelD, size: 11, sub: money(c) });
-        }
+        T(d, "GARY'S TENTS", cx, y + 6, 8.5, { color: C.paper, outline: C.ink });
+        for (let i = 0; i < 5; i++) { const on = i >= g.wins; d.rect(18, 9, { x: cx + (i - 2) * 21, y: y + 21, color: on ? C.orange : C.ink, radius: 3, opacity: on ? 1 : 0.5 }); }
     }
 }
-function drawHaggle(d, G) {
-    const { S } = G, P = G.pane, c = S.cust, cx = P.x + P.w / 2, y = P.h - 30 - (P.h > P.w ? 0 : G.game.view.safe.bottom), w = Math.min((P.w - 26) / 2, 170);
-    const offer = c.kid ? money(c.offer) : money(c.offer * E.haggleMult(S));
-    if (c.kid) { btn(d, G, "deal", "DEAL", cx, y, w * 1.3, 46, () => G.deal(), { color: C.teal, sub: offer, size: 16, pulse: true }); return; }
-    btn(d, G, "deal", "DEAL", cx - w / 2 - 3, y, w, 46, () => G.deal(), { color: C.teal, sub: offer, size: 16 });
-    const ch = Math.round(E.counterChance(S) * 100);
-    btn(d, G, "counter", "COUNTER", cx + w / 2 + 3, y, w, 46, () => G.counter(), { color: C.coral, sub: `${ch}% THEY STAY`, size: 14 });
-}
-function drawBubble(d, G) {
-    const b = G.A.bubble; if (!b) return;
-    const P = G.pane, M = metrics(G), maxW = Math.min(P.w - 56, 300), size = 13.5;
-    const m = G.game.renderer.measureText(b.text, { size, font: FONT, bold: true, align: "center", maxWidth: maxW - 22, lineHeight: 1.22 });
-    const h = m.height + (b.name ? 30 : 18), w = Math.max(m.width + 26, b.name ? Math.min(maxW, textWidth(b.name, 9) + 26) : 0), a = Math.min(1, b.t * 6, b.life * 4), k = 0.9 + 0.1 * Math.min(1, b.age * 8);
-    const by = G.game.view.safe.top + (E.weekOn(G.S) ? 160 : G.S.act === 2 ? 170 : 114) + h / 2, cx = Math.max(P.x + w / 2 + 8, Math.min(P.x + P.w - w / 2 - 8, b.x ?? (P.x + P.w * 0.6)));
-    d.push(); d.translate(cx, by); d.scale(k, k);
-    d.poly([[w * 0.1, h / 2 - 4], [w * 0.28, h / 2 - 4], [w * 0.3, h / 2 + 12]], { color: C.ink, opacity: a });
-    d.rect(w + 4, h + 4, { color: C.ink, radius: 12, opacity: a }); d.rect(w, h, { color: b.color ?? "#fffaf0", radius: 10, opacity: a });
-    d.poly([[w * 0.11, h / 2 - 3], [w * 0.26, h / 2 - 3], [w * 0.29, h / 2 + 7]], { color: b.color ?? "#fffaf0", opacity: a });
-    if (b.name) T(d, b.name, 0, -h / 2 + 11, 9, { color: C.coral, maxW: w - 16, opacity: a });
-    d.text(b.text, { y: b.name ? 7 : 0, size, font: FONT, bold: true, align: "center", maxWidth: maxW - 22, lineHeight: 1.22, color: C.ink, opacity: a });
-    d.pop();
-}
-function drawBanners(d, G) {
-    const P = G.pane, cx = P.x + P.w / 2;
-    for (const b of G.A.banners) {
-        const a = Math.min(1, b.age * 6, b.life * 3), s = b.age < 0.3 ? 1.5 - (b.age / 0.3) * 0.5 + Math.sin((b.age / 0.3) * Math.PI) * 0.1 : 1;
-        d.push(); d.translate(cx, P.h * b.y); d.scale(s, s); d.rotate(b.rot ?? -0.03);
-        const w = Math.min(P.w - 24, Math.max(textWidth(b.big, b.size ?? 22) + 34, 190)), h = b.small ? 58 : 42;
-        d.rect(w + 5, h + 5, { x: 2, y: 3, color: C.ink, radius: 6, opacity: a }); d.rect(w, h, { color: b.color ?? C.gold, radius: 4, opacity: a });
-        if (b.small) T(d, b.small, 0, -15, 10, { color: C.ink, opacity: a, maxW: w - 20 });
-        T(d, b.big, 0, b.small ? 8 : 0, b.size ?? 22, { color: C.ink, opacity: a, maxW: w - 20 });
-        d.pop();
+/** Everything you can press in the pane sits in one row under the slab. */
+function drawActions(d, G, M) {
+    const { S, A } = G, P = G.pane, row = [];
+    const talking = S.cust && !S.cust.final && A.cust && !A.cust.leaving && A.cust.arrived;
+    if (S.hype >= 1 && S.frenzy <= 0 && E.hypeOn(S) && !S.ended) row.push(["frenzy", "GO!", () => G.goFrenzy(), { color: C.orange, sub: "EVERYTHING MUST", size: 15, pulse: true }]);
+    if (talking) {
+        const c = S.cust, offer = money(c.kid ? c.offer : c.offer * E.haggleMult(S));
+        row.push(["deal", "DEAL", () => G.deal(), { color: C.teal, sub: offer, size: 15, pulse: !!c.kid }]);
+        if (!c.kid) row.push(["counter", "COUNTER", () => G.counter(), { color: C.coral, sub: `${Math.round(E.counterChance(S) * 100)}% THEY STAY`, size: 13 }]);
+    } else if (E.garyReady(S)) {
+        const c = E.garyPayoff(S);
+        row.push(["war", "BID WAR", () => G.goWar(), { color: C.coral, size: 13, pulse: true, sub: "TAP FAST" }]);
+        row.push(["pay", "BUY HIM OFF", S.cash >= c ? () => { if (E.payGary(S)) G.snd.deal(); } : null, { color: S.cash >= c ? C.teal : C.steelD, size: 11, sub: money(c) }]);
     }
+    if (!row.length) return;
+    const gap = 6, total = Math.min(P.w - 16, row.length * 172), w = (total - gap * (row.length - 1)) / row.length, x0 = P.x + P.w / 2 - total / 2 + w / 2;
+    row.forEach(([id, label, fn, o], i) => btn(d, G, id, label, x0 + i * (w + gap), M.rowY, w, 46, fn, o));
+}
+/** One message at a time, in its own lane under the HUD. It never reaches the item, the buttons or the panel. */
+function drawLane(d, G, M) {
+    const b = G.A.lane; if (!b) return;
+    const P = G.pane, cx = P.x + P.w / 2, maxW = Math.min(P.w - 16, 400), a = Math.min(1, b.age * 8, b.life * 5), y = M.laneY + M.laneH / 2;
+    if (b.big) {
+        const w = Math.min(maxW, textWidth(b.big, 15) + 28, 400), wide = b.small ? Math.max(w, Math.min(maxW, textWidth(b.small, 9) + 28)) : w;
+        d.rect(wide + 4, M.laneH - 2, { x: cx + 1, y: y + 1, color: C.ink, radius: 7, opacity: a }); d.rect(wide, M.laneH - 6, { x: cx, y, color: b.color ?? C.gold, radius: 5, opacity: a });
+        if (b.small) T(d, b.small, cx, y - 9, 8.5, { color: C.ink, opacity: a, maxW: wide - 14 });
+        T(d, b.big, cx, b.small ? y + 6 : y, b.small ? 13 : 15, { color: C.ink, opacity: a, maxW: wide - 14 });
+        return;
+    }
+    const style = (size) => ({ size, font: FONT, bold: true, align: "center", maxWidth: maxW - 20, lineHeight: 1.16 });
+    let size = 12.5, m = G.game.renderer.measureText(b.text, style(size));
+    if (m.height > 32) { size = 11; m = G.game.renderer.measureText(b.text, style(size)); }
+    const w = Math.min(maxW, Math.max(m.width + 20, b.name ? textWidth(b.name, 8) + 24 : 0)), h = M.laneH - 2, ty = b.name ? y + 5 : y;
+    d.rect(w + 4, h, { x: cx, y, color: C.ink, radius: 9, opacity: a }); d.rect(w, h - 4, { x: cx, y, color: b.color ?? "#fffaf0", radius: 7, opacity: a });
+    if (b.name) { if (m.height > 16) { const nw = textWidth(b.name, 7.5) + 12; d.rect(nw, 11, { x: cx, y: M.laneY + 1, color: C.coral, radius: 4, opacity: a }); T(d, b.name, cx, M.laneY + 1, 7.5, { color: C.paper, opacity: a, maxW: nw - 4 }); } else T(d, b.name, cx, y - 10, 8, { color: C.coral, opacity: a, maxW: w - 14 }); }
+    d.text(b.text, { x: cx, y: m.height > 16 ? y + 1 : ty, ...style(size), color: C.ink, opacity: a });
 }
 
 // --- Shop panel ----------------------------------------------------------------------------------
@@ -241,7 +225,7 @@ function crewCards(G) {
             const tw = Math.min(118, w * 0.34), textW = w - 76 - tw - 10;
             T(d, c.name, x + 68, y + 15, 11.5, { align: -1, color: C.ink, maxW: textW + (feed ? 0 : 0) });
             if (feed) btn(d, G, `feed${i}`, "FEED HOLE", x + 68 + 44, y + h - 15, 88, 22, () => G.feed(i), { color: C.plum, size: 9.5, layer: 1 });
-            else note(d, G, c.note, x + 68, y + 25, 10.5, textW, "#51477e");
+            else note(d, G, c.note, x + 68, y + 24, 12, textW, "#51477e");
             priceTag(d, G, money(cost), x + w - tw / 2 - 8, y + h / 2 - 6, tw, on);
             if (n > 1) T(d, `BUY ${n}`, x + w - tw / 2 - 8, y + h - 10, 8.5, { color: "#51477e" });
             // Next milestone.
@@ -261,7 +245,7 @@ function upCards(G) {
         else { d.sprite("burst", { x: x + 38, y: y + h / 2, width: 46, height: 46, color: C.coral }); T(d, "TAP", x + 38, y + h / 2, 11, { color: C.paper }); }
         T(d, u.name, x + 68, y + 15, 11, { align: -1, color: C.ink, maxW: textW });
         const eff = u.kind === "crew" ? `${E.act(S).crew[u.crew].name} ×${u.mult}` : `Taps ×${u.mult}, plus ${(u.pct * 100).toFixed(1)}% of income`;
-        note(d, G, `${eff}. ${u.note}`, x + 68, y + 25, 10, textW, "#51477e");
+        note(d, G, eff, x + 68, y + 24, 12, textW, "#51477e");
         priceTag(d, G, money(u.cost), x + w - tw / 2 - 8, y + h / 2, tw, on);
     });
 }
@@ -272,7 +256,7 @@ function ideaCards(G) {
         cardBase(d, G, id, x, y, w, h, done || live, ready ? () => G.list() : null, top, vh);
         if (!done && !live) { d.rect(w, h, { x: x + w / 2, y: y + h / 2, color: "#352a72", radius: 8 }); T(d, "NOT YET THINKABLE", x + w / 2, y + h / 2, 11, { color: C.steel }); return; }
         T(d, done ? c.name.replace("7", "_") : c.name, x + 20, y + 15, 12, { align: -1, color: C.ink, maxW: w - 124 });
-        note(d, G, c.effect, x + 20, y + 25, 10.5, w - 130, "#51477e");
+        note(d, G, c.effect, x + 20, y + 24, 12, w - 130, "#51477e");
         if (done) { T(d, "SOLD", x + w - 56, y + h / 2, 18, { color: C.coral, rot: -0.2 }); return; }
         if (ready) priceTag(d, G, "LIST IT", x + w - 56, y + h / 2, 92, true);
         else { priceTag(d, G, money(c.at), x + w - 56, y + h / 2 - 6, 96, false); T(d, "EARNED, TO LIST", x + w - 56, y + h - 10, 7.5, { color: "#51477e" }); }

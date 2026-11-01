@@ -1,14 +1,14 @@
 // Hex & Cards: a deck-building roguelike where cards are ingredients and order is everything.
 // sim.js holds the rules, data/ the content, art/ the painting and ui/ the scenes.
 import { createGame } from "./pogo.js";
-import { paintAll, trinketArt, warmStep } from "./art/index.js";
-import { G, init, route, saveRun, setTrArt } from "./ui/core.js";
+import { bakeAfterLoad, paintAll, warmStep } from "./art/index.js";
+import { G, init, route, saveRun } from "./ui/core.js";
 import { combatScene } from "./ui/combat.js";
 import { screens } from "./ui/screens.js";
-import { paintTitle, titleScene } from "./ui/title.js";
+import { titleScene } from "./ui/title.js";
 import * as S from "./sim.js";
 import { lockedTrinkets, tierOf } from "./meta.js";
-import { CARDS } from "./data/cards.js";
+import { ENEMIES } from "./data/enemies.js";
 
 const browser = typeof location !== "undefined", q = browser ? new URLSearchParams(location.search) : null;
 // Bots pass ?seed=; people get a fresh tower each session. Either way every run's seed comes from game.rng.
@@ -21,25 +21,17 @@ const game = createGame({
 game.touch.enabled = false;
 init(game);
 paintAll(game);
-paintTitle(game);
-setTrArt(trinketArt);
 G.startRun = (witch, asc, forced) => {
     const m = G.meta, runSeed = forced ?? game.rng.int(1, 2147483646);
     game.data.lastSeed = runSeed; game.data.nextSeed = undefined;
     G.run = S.newRun({ seed: runSeed, witch, asc, tier: tierOf(m), locked: lockedTrinkets(m) });
     route();
 };
-/** The first ever touch: straight into one scripted fight that teaches the whole game in four moves. */
+/** The first ever touch: straight into lesson one. The map, witches and everything else wait their turn. */
 G.startTutorial = () => {
     const m = G.meta, runSeed = game.rng.int(1, 2147483646);
-    const run = G.run = S.newRun({ seed: runSeed, witch: "posy", asc: 0, tier: tierOf(m), locked: lockedTrinkets(m), tutorial: true });
-    const first = run.map.nodes.find((n) => n.r === 0);
-    run.pos = { r: 0, c: first.c }; run.floor = 0; run.fights = 1;
-    S.startCombat(run, ["rat"], "fight");
-    const c = run.combat, all = [...c.hand, ...c.draw], take = (id) => { const i = all.findIndex((k) => k.id === id); return all.splice(i, 1)[0]; };
-    c.hand = [take("spark"), take("droplet"), take("spark"), take("droplet"), take("firecorn")];
-    c.draw = all;
-    c.enemies[0].hp = c.enemies[0].maxHp = 16;
+    G.run = S.newRun({ seed: runSeed, witch: "posy", asc: 0, tier: tierOf(m), locked: lockedTrinkets(m), tutorial: true });
+    S.startLesson(G.run);
     route();
 };
 /** For tools: a mid-run state, with no menus in the way. pogo check --scene combat --args '{"demo":1,"act":2}' */
@@ -54,7 +46,8 @@ game.scene("boot", (s) => { s.wait(0, () => game.go("title")); });
 game.on("scene", () => { G.overlay = null; G.routing = false; G.keys.length = 0; });
 // Between frames, paint one queued picture at a time.
 if (browser) setInterval(() => { if (!game.headless) warmStep(); }, 40);
-if (browser) document.getElementById("boot")?.remove();
+// Painted art is embedded, so this wait is only image decoding.
+if (browser) { await game.assets.ready(); bakeAfterLoad(game); document.getElementById("boot")?.remove(); }
 game.start("title");
-globalThis.__hex = { G, S, game };
+globalThis.__hex = { G, S, game, E: ENEMIES };
 export { game };

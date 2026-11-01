@@ -242,7 +242,7 @@ export class Brew {
             const before = this.total;
             this.push({ t: "fire", i, id: t.id, n: this.fires, pot: this.potency, mult: this.mult, depth: this.depth, el: t.el, repeat: this.depth > 0 || n > 0 });
             d.fx(this, cardVals(d, t.up));
-            if (t.el === "ember" && this.run.witch === "posy") this.flareTick();
+            if (t.el === "ember" && this.run.witch === "posy" && !this.run.prologue) this.flareTick();
             if (!this.dry) { const s = this.run.stats.cards; const e = s[t.id] ??= { fires: 0, dmg: 0 }; e.fires++; e.dmg += this.total - before; }
             hook(this.run, this.c, "afterFire", this, t);
             if (this.over) break;
@@ -536,6 +536,12 @@ function finishWin(run, c, ev) {
     const rng = stream(run, "reward");
     if (c.kind === "boss" && run.act === ACTS - 1) { endRun(run, true); return; }
     const r = run.reward = { gold: 0, cards: null, trinket: null, kind: c.kind };
+    if (c.kind === "lesson") {
+        r.gold = 10;
+        r.cards = lessonCards(run);
+        run.screen = "reward";
+        return;
+    }
     const base = c.kind === "boss" ? rng.int(70, 90) : c.kind === "elite" ? rng.int(30, 42) : rng.int(13, 21);
     r.gold = Math.floor(base * product(run, "goldMult") * (run.asc >= 5 ? 0.75 : 1));
     r.cards = rollCards(run, 3 + sum(run, "rewardCards"), c.kind === "elite" ? 2 : c.kind === "boss" ? 5 : 1);
@@ -592,12 +598,23 @@ function rewardPool(run, rar) {
     const w = WITCHES[run.witch];
     return REWARDABLE.filter((c) => c.rar === rar && (c.tier ?? 0) <= run.tier);
 }
+const PLAIN = /^(Deal \d+( to ALL| twice)?\.( Block \d+\.)?|Block \d+\.)$/;
+const isPlain = (c) => (c.el === "ember" || c.el === "brine") && PLAIN.test(c.text.replace(/\{\w+\}/g, "1"));
+/** Lessons only offer cards a newcomer can read at a glance. */
+function lessonCards(run) {
+    const rng = stream(run, "reward");
+    return rng.shuffle(REWARDABLE.filter(isPlain)).slice(0, 3).map((c) => ({ id: c.id, up: 0 }));
+}
+const TRICKY = /Reflux|Doom|Hex|Light|Refire/;
 function rollCards(run, n, luck) {
     const rng = stream(run, "reward"), w = WITCHES[run.witch], out = [];
     let tries = 0;
     while (out.length < n && tries++ < 200) {
         const roll = rng.next() * 100, rar = roll < 4 + luck * 3 ? "rare" : roll < 34 + luck * 3 ? "uncommon" : "common";
         let pool = rewardPool(run, rar);
+        // A first climb stays simple until the Cellar is done.
+        if (run.tutorial && run.act === 0) pool = pool.filter((c) => !TRICKY.test(c.text));
+        if (!pool.length) continue;
         if (rng.chance(0.68)) { const aff = pool.filter((c) => w.els.includes(c.el)); if (aff.length) pool = aff; }
         const c = rng.pick(pool);
         if (out.some((k) => k.id === c.id)) continue;
@@ -636,6 +653,13 @@ export function leaveReward(run) {
     if (r?.trinket) takeRewardTrinket(run);
     const kind = r?.kind;
     run.reward = null;
+    if (kind === "lesson") {
+        run.prologue++;
+        if (run.prologue <= 3) { startLesson(run); return; }
+        run.prologue = 0; run.hp = run.maxHp;
+        run.screen = "map";
+        return;
+    }
     if (kind === "boss") {
         run.hp = Math.min(run.maxHp, run.hp + Math.ceil((run.maxHp - run.hp) * 0.5));
         const rng = stream(run, "reward");
@@ -829,6 +853,21 @@ export function resolvePick(run, u) {
     nextScreen(run);
 }
 
+/** The first three fights of a first climb: one idea each, with the opening hand laid out. */
+const LESSONS = { 1: { foes: ["rat"], hp: [16], hand: ["spark", "droplet", "spark"] }, 2: { foes: ["imp"], hp: [28], hand: ["droplet", "spark", "droplet", "spark", "spark"] }, 3: { foes: ["rat", "rat"], hp: [12, 14] } };
+export function startLesson(run) {
+    const l = LESSONS[run.prologue];
+    run.pos = null; run.floor = -1;
+    startCombat(run, l.foes, "lesson");
+    const c = run.combat;
+    c.enemies.forEach((e, i) => { e.hp = e.maxHp = l.hp[i]; });
+    if (l.hand) {
+        const all = [...c.hand, ...c.draw], take = (id) => all.splice(all.findIndex((k) => k.id === id), 1)[0];
+        c.hand = l.hand.map(take);
+        c.draw = all;
+    }
+    return [];
+}
 // ---- A new run ----
 export function newRun({ seed, witch = "posy", asc = 0, tier = 99, locked = [], tutorial = false }) {
     const w = WITCHES[witch], s = seed >>> 0;
@@ -839,7 +878,8 @@ export function newRun({ seed, witch = "posy", asc = 0, tier = 99, locked = [], 
         stats: { fires: 0, maxFires: 0, wins: 0, elites: 0, bosses: 0, best: { dmg: 0, fires: 0, pot: 1, recipe: [] }, rx: {}, cards: {}, floors: 0 },
     };
     if (asc >= 9) { run.maxHp -= 6; run.hp = run.maxHp; }
-    for (const id of w.deck) addCard(run, id);
+    if (tutorial) { run.prologue = 1; for (const id of ["spark", "spark", "spark", "spark", "spark", "droplet", "droplet", "droplet", "droplet", "droplet"]) addCard(run, id); }
+    else for (const id of w.deck) addCard(run, id);
     if (asc >= 6) addCard(run, "gunk");
     genAct(run);
     return run;

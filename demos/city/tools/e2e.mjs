@@ -31,13 +31,13 @@ const watch = (page, errs) => { page.on("pageerror", (e) => errs.push(e.message)
     ok(await page.evaluate(() => __pogo.state().scene) === "play", `phone: Play reaches the harbour in ${Date.now() - t0} ms`);
     await sleep(500);
     const scale = await page.evaluate(() => __pogo.view.scale);
-    const card = await page.evaluate(() => { const h = __pogo.city.hud; const r = h.cardRect(h.cards.indexOf("market")); return { x: r.x, y: r.y }; });
+    const card = await page.evaluate(() => { const h = __pogo.city.hud; const r = h.cardRect(h.cards.indexOf("cottage")); return { x: r.x, y: r.y }; });
     await page.touchscreen.tap(card.x * scale, card.y * scale); await sleep(300);
     const sel = await page.evaluate(() => ({ s: __pogo.city.hud.sel, t: __pogo.city.hud.tile }));
-    ok(sel.s === "market" && sel.t !== null, `phone: tapped card selected ${sel.s}, ghost on tile ${sel.t}`);
+    ok(sel.s === "cottage" && sel.t !== null, `phone: tapped card selected ${sel.s}, ghost on tile ${sel.t}`);
     const pl = await page.evaluate(() => { const b = __pogo.city.hud.btn("plonk"); return { x: b.x, y: b.y }; });
     await page.touchscreen.tap(pl.x * scale, pl.y * scale); await sleep(700);
-    const built = await page.evaluate(() => ({ n: __pogo.city.sim.count("market"), h: __pogo.state().haptics, s: __pogo.state().sounds?.length }));
+    const built = await page.evaluate(() => ({ n: __pogo.city.sim.count("cottage"), h: __pogo.state().haptics, s: __pogo.state().sounds?.length }));
     ok(built.n === 1, `phone: Plonk builds, haptics ${JSON.stringify(built.h).slice(0, 60)}`);
     // Pinch, then a drag.
     const cdp = await ctx.newCDPSession(page);
@@ -49,6 +49,7 @@ const watch = (page, errs) => { page.on("pageerror", (e) => errs.push(e.message)
     const after = await page.evaluate(() => __pogo.city.w.cam.tDist);
     ok(after < before * 0.8, `phone: pinch zooms ${before.toFixed(1)} -> ${after.toFixed(1)}`);
     const yaw0 = await page.evaluate(() => { const h = __pogo.city.hud; h.deselect(); return __pogo.city.w.cam.tYaw; });
+    await sleep(100);
     const one = (type, x, y) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y, id: 1 }] });
     await one("touchStart", 120, 420); await sleep(50);
     for (let i = 1; i <= 8; i++) { await one("touchMove", 120 + i * 15, 420); await sleep(30); }

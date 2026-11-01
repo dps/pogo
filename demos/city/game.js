@@ -1,5 +1,5 @@
 // Tiny Tide Town: scenes, the event-to-juice wiring, progress. The town itself is in sim.js, its picture in world.js.
-import { createGame, dim, mesh, pin, rect, tap } from "./pogo.js";
+import { color, createGame, dim, mesh, pin, rect, tap } from "./pogo.js";
 import { BUILDINGS, HOURS, SANDBOX, SANDBOX_MAPS, SCENARIOS, STEP, TRAY_ORDER } from "./data.js";
 import { Sim } from "./sim.js";
 import { World, topY } from "./world.js";
@@ -9,6 +9,7 @@ import { act } from "./policy.js";
 import { FONT, Hud, widthOf } from "./ui.js";
 import { Sound } from "./audio.js";
 import { ICON, paintArt } from "./art.js";
+import { Coach } from "./coach.js";
 import { CARDS } from "./cards.js";
 
 const HOUR_SEC = 0.625;        // A day lasts 15 seconds at normal speed.
@@ -219,14 +220,6 @@ function settingsScene(s) {
 
 // --- Playing -------------------------------------------------------------------------------------
 
-const COACH_COVE = [
-    { card: "market", say: "Fish need a market. Tap the Market card.", done: (c) => c.hud.sel === "market" || c.sim.count("market") },
-    { say: "Gold rings score best. Now hit Plonk!", plonk: true, done: (c) => c.sim.count("market") },
-    { card: "cottage", say: "Lovely! Stars mean more output. Cottages bring folk and rent.", done: (c) => c.sim.count("cottage") },
-    { card: "wood", say: "Wood runs out. Put a Woodcutter beside the trees.", done: (c) => c.sim.count("wood") },
-    { say: "Drag to spin the island, pinch to zoom. The goals up top are yours!", time: 6 },
-];
-
 game.scene("play", (s, args = {}) => {
     game.touch.enabled = false;
     const index = args.index ?? 0;
@@ -237,11 +230,12 @@ game.scene("play", (s, args = {}) => {
     if (args.days) fastForward(sim, args.days);
     const dio = diorama(s, sim);
     const w = dio.w;
-    let won = false, thunderT = 3, festival = 0, coachI = 0, coachT = 0, gullT = 2;
+    let won = false, thunderT = 3, festival = 0, coach = null;
     const hud = new Hud(s, game, snd, sim, w, {
         cardFrame: (t) => (CARDS ? TRAY_ORDER.indexOf(t) : undefined),
         onSettings: () => { snd.tap(); settings(hud, [{ label: "Restart", fn: () => game.go("play", args, { fade: 0.2 }) }, { label: "Quit", fn: () => game.go("harbours", {}, { fade: 0.2 }) }]); },
         onPlace: (b, c, prev) => landing(b, c, prev),
+        onSkip: () => { snd.tap(); coach?.skip(); },
         onDemolish: (c, b) => {
             const y = w.surface(c);
             w.puffAt(c.x, y, c.z, 12);
@@ -252,6 +246,10 @@ game.scene("play", (s, args = {}) => {
         },
     });
     game.city = { sim, w, hud, s };
+    if (index === 0 && !args.sandbox && !args.days && !p.taught) {
+        coach = new Coach(hud, sim, w, game, snd, () => { store((q) => { q.taught = true; }); });
+        game.city.coach = coach;
+    }
 
     function landing(b, c, prev) {
         hud.pop(c.i, prev.stars ? `+${prev.stars}` : "", { icon: prev.stars ? "star" : null, big: 1.4, h: 1, color: "#ffe9a8" });
@@ -374,15 +372,17 @@ game.scene("play", (s, args = {}) => {
         snd.tick(dt);
         snd.ambience(w.stormVis, w.water);
         hud.update(dt);
-        coachStep(dt);
+        if (coach && !coach.done) coach.update(dt);
         if (festival > 0) fireworks(dt);
         lightning(dt);
         if (hud.modal) return f;
-        let v = f + dt * hud.speed / HOUR_SEC;
+        const held = coach && !coach.done;
+        if (held && coach.hold) return f;
+        let v = f + dt * (held ? 2.5 : hud.speed) / HOUR_SEC;
         while (v >= 1) {
             v -= 1;
             sim.tick();
-            for (const e of sim.events) react(e);
+            for (const e of sim.events) { react(e); if (coach && !coach.done) coach.event(e); }
             sim.events.length = 0;
         }
         return v;
@@ -405,20 +405,6 @@ game.scene("play", (s, args = {}) => {
             thunderT = game.fxRng.range(2.5, 6);
             w.flash = 0.5;
             s.wait(game.fxRng.range(0.1, 0.5), () => { snd.thunder(0.7 + sim.stormB * 0.3); s.shake(0.05, 0.2, { haptic: false }); });
-        }
-    }
-
-    function coachStep(dt) {
-        if (index !== 0 || args.sandbox || args.days || won) { hud.coachCard = null; if (hud.bubble?.pin) hud.bubble = null; return; }
-        const step = COACH_COVE[coachI];
-        if (!step) { hud.coachCard = null; return; }
-        coachT += dt;
-        if (!hud.bubble || hud.bubble.text !== step.say) hud.say(step.say, 99, true);
-        hud.coachCard = hud.sel === step.card ? null : step.card ?? null;
-        if (step.card) hud.reveal(step.card);
-        if (step.time ? coachT > step.time : step.done({ hud, sim })) {
-            coachI++; coachT = 0;
-            hud.bubble = null;
         }
     }
 
@@ -453,10 +439,10 @@ game.scene("thumb", (s, args) => {
     const merged = new MB();
     if (!args.bare) {
         // Stand it on a little tile, like a game piece.
-        const ground = args.type === "dock" || args.type === "yard" ? "#f2dfa9" : "#9fd873", t = -0.26;
+        const ground = args.type === "dock" || args.type === "yard" ? "#eadfc2" : "#c9d6b4", t = -0.12;
         const hexP = (r, y) => [0, 1, 2, 3, 4, 5].map((i) => [cornerX(i) * r, y, cornerZ(i) * r]);
-        merged.poly(hexP(0.97, -0.002), args.type === "lane" ? "#d7c5a0" : ground, [0, -1, 0]);
-        for (let i = 0; i < 6; i++) { const j = (i + 1) % 6; merged.poly([[cornerX(i) * 0.97, -0.002, cornerZ(i) * 0.97], [cornerX(j) * 0.97, -0.002, cornerZ(j) * 0.97], [cornerX(j) * 0.97, t, cornerZ(j) * 0.97], [cornerX(i) * 0.97, t, cornerZ(i) * 0.97]], "#b58a58", [0, -0.1, 0]); }
+        merged.poly(hexP(0.97, -0.002), args.type === "lane" ? "#e0d5bc" : ground, [0, -1, 0]);
+        for (let i = 0; i < 6; i++) { const j = (i + 1) % 6; merged.poly([[cornerX(i) * 0.97, -0.002, cornerZ(i) * 0.97], [cornerX(j) * 0.97, -0.002, cornerZ(j) * 0.97], [cornerX(j) * 0.97, t, cornerZ(j) * 0.97], [cornerX(i) * 0.97, t, cornerZ(i) * 0.97]], "#c4ad8c", [0, -0.05, 0]); }
     }
     merged.append(m.solid);
     merged.append(m.glow);
@@ -468,7 +454,11 @@ game.scene("thumb", (s, args) => {
     cam.fov = 20;
     const ang = 0.72, D = box / Math.tan(10 * Math.PI / 180) * 0.68, h = args.h ?? 0.3;
     cam.set([Math.sin(ang) * D * 0.62, h + D * 0.62, Math.cos(ang) * D * 0.62], [0, h, 0]);
+    // The same soft noon as the island, so cards look like the world and not a brighter copy of it.
     s.light.dir.set(-0.55, -1, -0.5);
+    s.light.color = color([0.64, 0.61, 0.54]);
+    s.light.sky = color([0.56, 0.6, 0.64]);
+    s.light.ground = color([0.46, 0.43, 0.38]);
 });
 
 game.start("title");

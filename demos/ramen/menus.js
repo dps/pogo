@@ -1,5 +1,5 @@
 // Everything outside a shift: title, the ledger between shifts, results, letters, the ending.
-import { button, pin, pos, rect, tap, ui } from "./pogo.js";
+import { button, layer, pin, pos, rect, tap, ui } from "./pogo.js";
 import { BROTHS, DECOR, ENDING, KIT, LOCATIONS, NANA, PROLOGUE, RECIPES, REGULARS, SEASON_LABEL, SHIFTS, STAFF } from "./data.js";
 import { buyDecor, buyKit, buyMove, buyRecipe, buyStaff, endlessOpen, greeting, kitCost, needsMove, recipeOpen, shiftIndex, staffOpen, starTotal, unlocked } from "./progress.js";
 import { CREAM, FONT, GOLD, RED, SERIF, SOY, drawBowl, money } from "./stage.js";
@@ -20,16 +20,16 @@ export function chunky(label, o = {}) {
             d.rect(w, h, { y: press, color: fill, radius: r });
             d.rect(w - 8, h * 0.42, { y: press - h * 0.2, color: "#ffffff", opacity: 0.13, radius: r - 4 });
             d.text(label, { y: press + (o.sub ? -8 : 0), size, bold: true, font: FONT, color: ink });
-            if (o.sub) d.text(o.sub, { y: press + 12, size: 12, bold: true, font: FONT, color: ink, opacity: 0.85 });
+            if (o.sub) d.text(o.sub, { y: press + 14, size: 13, bold: true, font: FONT, color: ink, opacity: 0.85 });
         },
     };
 }
 
 /** Sound, vibration and thumb side. Returns the entities so a pause panel can remove them. */
-export function settingsRow(s, R, anchor, off) {
+export function settingsRow(s, R, anchor, off, depth = 0) {
     const out = [], g = s.game ?? R.game, game = R.stage?.game ?? g ?? globalThis.__pogo, W = 56;
     const icon = (dx, getter, flip, art) => {
-        const e = s.add([pin(anchor, anchor === "center" ? [dx, off] : [off[0] + dx, off[1]]), rect(50, 50, { color: "#00000000" }), tap(() => { flip(); R.persist(); R.sound.ui(); }), { draw(d) {
+        const e = s.add([layer(depth), pin(anchor, anchor === "center" ? [dx, off] : [off[0] + dx, off[1]]), rect(50, 50, { color: "#00000000" }), tap(() => { flip(); R.persist(); R.sound.ui(); }), { draw(d) {
             d.rect(44, 44, { color: "#160a06", radius: 13 }); d.rect(39, 39, { color: getter() ? "#7a4a2a" : "#4a3a36", radius: 11 });
             art(d, getter());
         } }]);
@@ -46,8 +46,8 @@ export function settingsRow(s, R, anchor, off) {
         if (!on) d.line([-15, -13], [15, 13], { width: 2.6, color: "#ffb0a0" });
     });
     icon(W, () => true, () => { R.save.hand = R.save.hand === "left" ? "right" : "left"; }, (d) => {
-        d.text(R.save.hand === "left" ? "L" : "R", { y: -6, size: 16, bold: true, font: FONT, color: CREAM });
-        d.text("thumb", { y: 10, size: 10, bold: true, font: FONT, color: CREAM });
+        d.text(R.save.hand === "left" ? "Left" : "Right", { y: -7, size: 13, bold: true, font: FONT, color: CREAM });
+        d.line([-9, 12], [9, 12], { width: 3, color: CREAM }); d.circle(4, { x: R.save.hand === "left" ? -9 : 9, y: 12, color: GOLD });
     });
     return out;
 }
@@ -118,7 +118,7 @@ export function installMenus(game, R) {
     });
 
     // --- Ledger -------------------------------------------------------------------------------------------------------
-    const TABS = [["shop", "Today"], ["book", "Cookbook"], ["kit", "Kitchen"], ["decor", "Decor"], ["regs", "Regulars"], ["map", "Shifts"]];
+    const TABS = [["shop", "Today"], ["book", "Book"], ["kit", "Kitchen"], ["decor", "Decor"], ["regs", "People"], ["map", "Shifts"]];
 
     game.scene("ledger", (s, args = {}) => {
         game.touch.enabled = false; game.data.scene = "ledger";
@@ -141,7 +141,7 @@ export function installMenus(game, R) {
         TABS.forEach(([id, name], i) => {
             const w = land ? 88 : (W - safe.left - safe.right - 8) / TABS.length, h = land ? (H - safe.top - safe.bottom - 54) / TABS.length : 54;
             const x = land ? safe.left + 48 : safe.left + 4 + w * (i + 0.5), y = land ? safe.top + 52 + h * (i + 0.5) : H - safe.bottom - 32;
-            add(x, y, chunky(name, { width: w - 4, height: h - 6, textSize: Math.min(13, w * 0.17), radius: 9, color: tab === id ? "#b8332a" : "#5a3524", onTap: () => { R.sound.ui(); re({ tab: id, page: 0, pick: null }); } }));
+            add(x, y, chunky(name, { width: w - 4, height: h - 6, textSize: 13, radius: 9, color: tab === id ? "#b8332a" : "#5a3524", onTap: () => { R.sound.ui(); re({ tab: id, page: 0, pick: null }); } }));
         });
 
         if (tab === "shop") shopTab();
@@ -201,12 +201,12 @@ export function installMenus(game, R) {
                 const y = body.y + rh * (i + 0.5);
                 if (r.kind === "kit") {
                     const k = KIT[r.id], c = kitCost(S, r.id), lvl = S.kit[r.id] ?? 0;
-                    cards.push((d) => { rowCard(d, y, rh - 5); d.sprite("kit", { frame: k.icon, x: body.x + 32, y, width: 44, height: 41 }); d.text(`${k.name}${k.max > 1 ? `  ${lvl}/${k.max}` : ""}`, { x: cx - 20, y: y - 10, size: 15, bold: true, font: FONT, color: INK }); d.text(k.desc, { x: cx - 20, y: y + 11, size: 12, font: SERIF, color: "#6a4630", maxWidth: body.w - 190 }); });
+                    cards.push((d) => { rowCard(d, y, rh - 5); d.sprite("kit", { frame: k.icon, x: body.x + 32, y, width: 44, height: 41 }); d.text(`${k.name}${k.max > 1 ? `  ${lvl}/${k.max}` : ""}`, { x: cx - 20, y: y - 10, size: 15, bold: true, font: FONT, color: INK }); d.text(k.desc, { x: cx - 20, y: y + 11, size: 13, font: SERIF, color: "#6a4630", maxWidth: body.w - 190 }); });
                     if (c !== null) add(body.x + body.w - 50, y, chunky(money(c), { width: 92, height: Math.min(44, rh - 16), textSize: 14, color: S.cash >= c ? "#3f7a4e" : "#6e5a4a", onTap: () => buy(buyKit(S, r.id)) }));
                     else cards.push((d) => d.text("Fitted", { x: body.x + body.w - 50, y, size: 14, bold: true, font: FONT, color: "#3f7a4e" }));
                 } else {
                     const t = STAFF[r.id], has = S.staff[r.id], open = staffOpen(S, r.id);
-                    cards.push((d) => { rowCard(d, y, rh - 5); portrait(d, t.look, body.x + 32, y, Math.min(rh - 12, 54), open ? MOOD.happy : MOOD.calm); d.text(open ? `${t.name}, ${t.role}` : "Someone new", { x: cx - 20, y: y - 10, size: 15, bold: true, font: FONT, color: INK }); d.text(open ? t.desc : `Looking for work from day ${t.unlock + 1}`, { x: cx - 20, y: y + 11, size: 12, font: SERIF, color: "#6a4630", maxWidth: body.w - 190 }); });
+                    cards.push((d) => { rowCard(d, y, rh - 5); portrait(d, t.look, body.x + 32, y, Math.min(rh - 12, 54), open ? MOOD.happy : MOOD.calm); d.text(open ? `${t.name}, ${t.role}` : "Someone new", { x: cx - 20, y: y - 10, size: 15, bold: true, font: FONT, color: INK }); d.text(open ? t.desc : `Looking for work from day ${t.unlock + 1}`, { x: cx - 20, y: y + 11, size: 13, font: SERIF, color: "#6a4630", maxWidth: body.w - 190 }); });
                     if (has) cards.push((d) => d.text("Hired", { x: body.x + body.w - 50, y, size: 14, bold: true, font: FONT, color: "#3f7a4e" }));
                     else if (open) add(body.x + body.w - 50, y, chunky(money(t.cost), { width: 92, height: Math.min(44, rh - 16), textSize: 14, color: S.cash >= t.cost ? "#3f7a4e" : "#6e5a4a", onTap: () => buy(buyStaff(S, r.id)) }));
                 }
@@ -239,8 +239,8 @@ export function installMenus(game, R) {
                         if (slot === "noren") d.rect(sw - 14, q, { x, y: yy - 7, color: it.a, radius: 3 });
                         if (slot === "lantern") d.sprite("lantern", { x, y: yy - 7, width: q * 0.68, height: q, color: it.c });
                         if (slot === "glaze") d.sprite("bowl", { frame: j, x, y: yy - 7, width: q * 1.15, height: q });
-                        if (slot === "charm") { if (j) d.sprite("charm", { frame: j, x, y: yy - 7, width: q, height: q }); else d.text("none", { x, y: yy - 7, size: 11, font: FONT, color: INK }); }
-                        d.text(has ? (on ? "On" : "Own") : money(it.cost), { x, y: yy + h / 2 - 9, size: 10.5, bold: true, font: FONT, color: has ? "#3f7a4e" : S.cash >= it.cost ? INK : "#a04a3a" });
+                        if (slot === "charm") { if (j) d.sprite("charm", { frame: j, x, y: yy - 7, width: q, height: q }); else d.text("none", { x, y: yy - 7, size: 13, font: FONT, color: INK }); }
+                        d.text(has ? (on ? "On" : "Own") : money(it.cost), { x, y: yy + h / 2 - 9, size: 13, bold: true, font: FONT, color: has ? "#3f7a4e" : S.cash >= it.cost ? INK : "#a04a3a" });
                     });
                 });
             });
@@ -255,8 +255,8 @@ export function installMenus(game, R) {
                     if (!e) { portrait(d, r.look, body.x + 38, y, Math.min(rh - 12, 62), MOOD.calm); d.text("Not met yet", { x: cx + 24, y, size: 14, bold: true, font: FONT, color: "#7a6450" }); return; }
                     portrait(d, r.look, body.x + 38, y, Math.min(rh - 12, 62), e.last === 3 ? MOOD.happy : e.last ? MOOD.calm : MOOD.cross);
                     d.text(r.name, { x: cx + 24, y: y - rh * 0.3, size: 15, bold: true, font: FONT, color: INK });
-                    d.text(greeting(S, id, 0), { x: cx + 24, y: y + 8, size: 12.5, font: SERIF, color: "#5a3a26", maxWidth: body.w - 88, lineHeight: 1.14 });
-                    d.text(`${e.visits} visits  ·  ${e.perfects} perfect`, { x: cx + 24, y: y + rh * 0.36, size: 10.5, bold: true, font: FONT, color: RED });
+                    d.text(greeting(S, id, 0), { x: cx + 24, y: y + 8, size: 13, font: SERIF, color: "#5a3a26", maxWidth: body.w - 88, lineHeight: 1.14 });
+                    d.text(`${e.visits} visits  ·  ${e.perfects} perfect`, { x: cx + 24, y: y + rh * 0.36, size: 13, bold: true, font: FONT, color: RED });
                 });
             });
             pager(pages, page);
@@ -277,7 +277,7 @@ export function installMenus(game, R) {
                     if (ok) add(x, yy, { ...rect(w, h, { color: "#00000000" }), ...tap(() => begin(i)), id: "node" });
                     cards.push((d) => {
                         d.rect(w, h, { x, y: yy, color: ok ? (i === day ? "#b8332a" : "#5a3524") : "#2a1a14", radius: 7, opacity: 0.94 });
-                        d.text(i + 1, { x, y: yy - h * 0.2 + 1, size: 12, bold: true, font: FONT, color: ok ? CREAM : "#7a6a5a" });
+                        d.text(i + 1, { x, y: yy - h * 0.2 + 1, size: 13, bold: true, font: FONT, color: ok ? CREAM : "#7a6a5a" });
                         if (S.stars[i]) stars(d, x, yy + h * 0.24, S.stars[i], 11, 11);
                     });
                 });
@@ -292,7 +292,7 @@ export function installMenus(game, R) {
             cards.push((d) => {
                 d.rect(body.w, body.h - 54, { x: cx, y: body.y + (body.h - 54) / 2, color: PAPER, radius: 12 });
                 d.text(`${SEASON_LABEL[season]} pages`, { x: cx, y: y0 + 12, size: 19, bold: true, font: SERIF, color: INK });
-                d.text(`${count} of ${total} recipes stamped perfect`, { x: cx, y: y0 + 34, size: 12, bold: true, font: FONT, color: RED });
+                d.text(`${count} of ${total} recipes stamped perfect`, { x: cx, y: y0 + 34, size: 13, bold: true, font: FONT, color: RED });
             });
             ids.forEach((id, i) => {
                 const r = RECIPES[id], x = body.x + cw * (i % cols + 0.5), y = y0 + 48 + rh * (Math.floor(i / cols) + 0.5), ok = known(id), e = S.book[id];
@@ -302,7 +302,7 @@ export function installMenus(game, R) {
                     if (id === pick) d.rect(cw - 4, rh - 4, { x, y, color: "#f4c76a", radius: 10 });
                     if (ok) drawBowl(d, x, y - rh * 0.1, br, recipeBowl(id, glazeOf(R), t));
                     else { d.sprite("bowl", { frame: 0, x, y: y - rh * 0.06, width: br * 2.1, height: br * 1.8, color: "#6a5040", opacity: 0.5 }); }
-                    d.text(ok ? r.name : "Lost page", { x, y: y + rh * 0.37, size: 11.5, bold: true, font: FONT, color: ok ? INK : "#9a8468", maxWidth: cw - 6 });
+                    d.text(ok ? r.name : "Lost page", { x, y: y + rh * 0.37, size: 13, bold: true, font: FONT, color: ok ? INK : "#9a8468", maxWidth: cw - 6 });
                     if (e?.perfect) d.sprite("star", { frame: 1, x: x + br * 0.92, y: y - rh * 0.1 - br * 0.6, width: 20, height: 20 });
                 });
             });
@@ -310,8 +310,8 @@ export function installMenus(game, R) {
             if (p) {
                 const ok = known(pick), canBuy = !S.recipes[pick] && recipeOpen(S, pick), e = S.book[pick];
                 cards.push((d) => {
-                    d.text(ok ? p.note : "Someone in town has this page. Keep feeding them.", { x: canBuy ? cx - 50 : cx, y: y + 6, size: 12.5, font: SERIF, color: INK, maxWidth: body.w - (canBuy ? 124 : 24), lineHeight: 1.14 });
-                    if (ok) d.text(`${BROTHS[p.broth].name}  ·  ${money(p.price)}  ·  served ${e?.served ?? 0}, perfect ${e?.perfect ?? 0}`, { x: cx, y: y - 14, size: 11, bold: true, font: FONT, color: RED });
+                    d.text(ok ? p.note : "Someone in town has this page. Keep feeding them.", { x: canBuy ? cx - 50 : cx, y: y + 6, size: 13, font: SERIF, color: INK, maxWidth: body.w - (canBuy ? 124 : 24), lineHeight: 1.14 });
+                    if (ok) d.text(`${BROTHS[p.broth].name}  ·  ${money(p.price)}  ·  served ${e?.served ?? 0}, perfect ${e?.perfect ?? 0}`, { x: cx, y: y - 14, size: 13, bold: true, font: FONT, color: RED, maxWidth: body.w - 12 });
                 });
                 if (canBuy) add(body.x + body.w - 54, y + 4, chunky(money(p.cost), { width: 94, height: 42, textSize: 14, color: S.cash >= p.cost ? "#3f7a4e" : "#6e5a4a", onTap: () => buy(buyRecipe(S, pick)) }));
             } else cards.push((d) => d.text("Tap a page", { x: cx, y: y + 2, size: 13, font: SERIF, color: "#7a6450" }));
@@ -319,7 +319,7 @@ export function installMenus(game, R) {
         }
         function pagerSeason(page) {
             const y = body.y + body.h - 26, n = 4, seasons = ["Spring", "Summer", "Autumn", "Winter"], w = (body.w - 8) / n;
-            seasons.forEach((nm, i) => add(body.x + 4 + w * (i + 0.5), y, chunky(nm, { width: w - 4, height: 50, textSize: 12.5, radius: 9, color: i === page ? "#b8332a" : "#5a3524", onTap: () => { R.sound.ui(); re({ page: i, pick: null }); } })));
+            seasons.forEach((nm, i) => add(body.x + 4 + w * (i + 0.5), y, chunky(nm, { width: w - 4, height: 50, textSize: 13, radius: 9, color: i === page ? "#b8332a" : "#5a3524", onTap: () => { R.sound.ui(); re({ page: i, pick: null }); } })));
         }
 
         s.onDraw((d) => {

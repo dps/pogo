@@ -1,6 +1,7 @@
 // The drawing API handed to draw hooks. All coordinates are local to the entity being drawn, centred on it.
 import { color, Color, ColorLike, mat4, mat4Compose, mat4Mul, toVec, Vec, VecLike } from "../math";
 import type { Entity } from "../entity";
+import type { Camera2D } from "../camera";
 import type { Game } from "../game";
 import { MeshItem, MODE_SDF, MODE_SOLID, MODE_TEXTURE, TextStyle } from "./backend";
 
@@ -10,10 +11,16 @@ const WHITE = new Color();
 const scratch = mat4();
 const QUAD = new Float32Array(6);
 
+export interface DrawnText { text: string; x0: number; y0: number; x1: number; y1: number; size: number; hidden: boolean; }
+
 export class Draw {
     private m = new Float32Array([1, 0, 0, 1, 0, 0]);
     private alpha = 1;
     private stack: Float32Array[] = [];
+    /** @internal Text drawn this frame, in view units, for the layout audit. Null when not recording. */
+    texts: DrawnText[] | null = null;
+    /** @internal The camera while drawing world entities, so recorded text lands in view units. */
+    camera: Camera2D | null = null;
     private colors = new Map<string, Color>();
 
     constructor(private game: Game) {}
@@ -66,8 +73,22 @@ export class Draw {
         try { fn(); } finally { this.r.blend(false); }
     }
 
+    /** A rectangle's box in view units. */
+    private box(x: number, y: number, w: number, h: number) {
+        const m = this.m, cam = this.camera, sx = Math.hypot(m[0], m[1]), sy = Math.hypot(m[2], m[3]), zoom = cam?.zoom ?? 1;
+        let cx = m[0] * x + m[2] * y + m[4], cy = m[1] * x + m[3] * y + m[5];
+        if (cam) { const p = cam.toView(new Vec(cx, cy)); cx = p.x; cy = p.y; }
+        const hw = (w * sx * zoom) / 2, hh = (h * sy * zoom) / 2;
+        return { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh };
+    }
+
     rect(w: number, h: number, o: PaintOptions & { radius?: number; outline?: number } = {}) {
         const [r, g, b, a] = this.paint(o.color, o), x = o.x ?? 0, y = o.y ?? 0, hw = w / 2, hh = h / 2, pad = 1.5;
+        // A solid panel hides earlier text, so a menu over a HUD isn't an overlap.
+        if (this.texts?.length && a > 0.9 && !o.outline) {
+            const p = this.box(x, y, w, h);
+            for (const t of this.texts) if (t.x0 >= p.x0 - 1 && t.y0 >= p.y0 - 1 && t.x1 <= p.x1 + 1 && t.y1 <= p.y1 + 1) t.hidden = true;
+        }
         this.r.quad(this.m, x - hw - pad, y - hh - pad, x + hw + pad, y + hh + pad, -hw - pad, -hh - pad, hw + pad, hh + pad, r, g, b, a, null, MODE_SDF, hw, hh, Math.min(o.radius ?? 0, hw, hh), o.outline ?? 0);
     }
     circle(radius: number, o: PaintOptions & { outline?: number } = {}) {
@@ -117,6 +138,12 @@ export class Draw {
         const style: TextStyle = { size: o.size ?? 20, font: o.font ?? DEFAULT_FONT, bold: o.bold ?? false, align: o.align ?? "center", maxWidth: o.maxWidth ?? 0, lineHeight: o.lineHeight ?? 1.25 };
         const t = this.r.text(String(str), style), x = o.x ?? 0, y = o.y ?? 0;
         const [r, g, b, a] = this.paint(o.color, o);
+        if (this.texts && a > 0.15 && String(str).trim()) {
+            const m = this.m;
+            // Line boxes are taller than the letters, so trim them or stacked titles count as overlapping.
+            const size = style.size * Math.hypot(m[2], m[3]) * (this.camera?.zoom ?? 1);
+            this.texts.push({ text: String(str), size, hidden: false, ...this.box(x, y, t.width, Math.max(style.size * 0.7, t.height - style.size * 0.45)) });
+        }
         this.r.quad(this.m, x - t.width / 2, y - t.height / 2, x + t.width / 2, y + t.height / 2, 0, 0, 1, 1, r, g, b, a, t.tex, MODE_TEXTURE, 0, 0, 0, 0);
     }
 

@@ -1,8 +1,9 @@
 // Real-browser verification in Chrome: WebGL output, phone emulation, multi-touch, rotation, safe areas and context loss.
 // Uses the system Chrome (or CHROME_PATH). Screenshots go to SHOTS_DIR, default tests/.shots.
-import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { crc32, deflateSync } from "node:zlib";
 import { build } from "esbuild";
 import { chromium } from "playwright-core";
 
@@ -222,6 +223,37 @@ try {
             return { time: c.time, beat: c.beat, state: a.ctx?.state };
         });
         check("song clock: follows the audio hardware", clock.state !== "running" || (clock.time > 0.5 && clock.time < 1.1 && Math.abs(clock.beat - clock.time * 2) < 1e-6), JSON.stringify(clock));
+        await ctx.close();
+    }
+
+    // --- pogo art --------------------------------------------------------------------------------
+    {
+        // A green disc on magenta that darkens towards one corner, like a generator's "flat" background, as a real PNG.
+        const size = 64, rows = [];
+        for (let y = 0; y < size; y++) {
+            const row = Buffer.alloc(1 + size * 3);
+            for (let x = 0; x < size; x++) {
+                const shade = 1 - (x + y) / (size * 4), disc = Math.hypot(x - 32, y - 32) < 16;
+                const shadow = Math.hypot(x - 32, y - 32) < 5; // a dark purple patch inside the subject, the same hue as the key
+                row.set(shadow ? [50, 10, 60] : disc ? [40, 180, 60] : [255 * shade, 0, 255 * shade], 1 + x * 3);
+            }
+            rows.push(row);
+        }
+        const chunk = (name, data) => { const b = Buffer.alloc(8 + data.length + 4), body = Buffer.concat([Buffer.from(name), data]); b.writeUInt32BE(data.length); body.copy(b, 4); b.writeUInt32BE(crc32(body), 8 + data.length); return b; };
+        const head = Buffer.alloc(13);
+        head.writeUInt32BE(size, 0); head.writeUInt32BE(size, 4); head[8] = 8; head[9] = 2;
+        const raw = join(SHOTS, "art-raw.png"), out = join(SHOTS, "art-out.js");
+        writeFileSync(raw, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", head), chunk("IDAT", deflateSync(Buffer.concat(rows))), chunk("IEND", Buffer.alloc(0))]));
+        execFileSync(process.execPath, [join(ROOT, "bin/pogo.js"), "art", raw, "--out", out, "--size", "64x64"], { stdio: "pipe" });
+        const url = /export default "(.+)";/.exec(readFileSync(out, "utf8"))[1], ctx = await browser.newContext(), page = await ctx.newPage();
+        const px = await page.evaluate(async (src) => {
+            const i = new Image(); i.src = src; await i.decode();
+            const c = document.createElement("canvas"); c.width = i.width; c.height = i.height;
+            const x = c.getContext("2d"); x.drawImage(i, 0, 0);
+            const at = (a, b) => [...x.getImageData(a, b, 1, 1).data];
+            return { w: i.width, centre: at(i.width >> 1, i.height >> 1), ring: at((i.width >> 1) + 10, i.height >> 1), corner: at(1, 1), far: at(62, 62) };
+        }, url);
+        check("pogo art: removes a shaded background and keeps the subject", px.centre[3] > 240 && px.ring[3] > 240 && px.ring[1] > 120 && px.corner[3] === 0 && px.far[3] === 0, JSON.stringify(px));
         await ctx.close();
     }
 

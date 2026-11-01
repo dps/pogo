@@ -2,6 +2,7 @@
 import { BUILDINGS, MAX_STARS, TRAY_ORDER } from "./data.js";
 import { ICON } from "./art.js";
 import { wallCut } from "./policy.js";
+import { nextAction } from "./coach.js";
 
 export const FONT = '"Arial Rounded MT Bold","Avenir Next Rounded","Nunito",ui-rounded,"Trebuchet MS",system-ui,sans-serif';
 const INK = "#20505c", CREAM = "#fff6e4", CARD = "#fff6e4", TEAL = "#2f9c95", CORAL = "#e0694a", SHADOW = "#12333d55", PANEL = "#20505cd9";
@@ -48,7 +49,10 @@ export class Hud {
         this.candidates = [];
         this.bump = { coin: 0, wood: 0, fish: 0, grain: 0 };
         this.floodView = false;
-        this.coach = null;
+        this.coach = null;            // The guided lesson's current instruction.
+        this.allow = null;            // Cards shown, while the lesson is introducing them.
+        this.hide = {};
+        this.next = null;
         this.keys = [];
         this.lastTick = -1;
         if (typeof addEventListener === "function") {
@@ -58,7 +62,7 @@ export class Hud {
         }
     }
 
-    get cards() { return TRAY_ORDER.filter((t) => this.sim.scn.unlocks.includes(t)); }
+    get cards() { return TRAY_ORDER.filter((t) => this.sim.scn.unlocks.includes(t) && (!this.allow || this.allow.has(t))); }
 
     layout() {
         const v = this.s.view, sf = v.safe, W = v.width, H = v.height;
@@ -78,7 +82,8 @@ export class Hud {
             return;
         }
         add("gear", R - 18, top, 36, 32, () => this.o.onSettings?.(), { icon: ICON.cog });
-        if (!this.o.noSpeed) add("speed", R - 60, top, 42, 32, () => this.cycleSpeed(), { speed: true });
+        if (!this.hide.speed) add("speed", R - 60, top, 42, 32, () => this.cycleSpeed(), { speed: true });
+        else if (this.coach) add("skip", R - 66, top, 50, 32, () => this.o.onSkip?.(), { skip: true });
         const trayTop = B - trayH;
         if (this.sel) {
             const barY = trayTop - 42, plonkW = land ? 88 : 104;
@@ -90,13 +95,18 @@ export class Hud {
             const c = this.sim.cells[this.sheet];
             if (c.b && c.b.type !== "hall") add("demolish", R - 58, B - trayH - 34, 104, 46, () => this.demolish(c), { label: "Demolish", danger: true });
         }
+        if (this.next && !this.sel && this.sheet === null && !this.coach && !this.bubble) {
+            const w = Math.min(R - L, widthOf(this.next.text, 13.5) + 60), type = this.next.card;
+            add("next", land ? L + w / 2 : this.m.cx, trayTop - 20, w, 32, () => { this.select(type); this.reveal(type); }, { nextHint: true, label: this.next.text });
+        }
         this.btns = btns;
     }
 
     btn(id) { return this.btns.find((b) => b.id === id) ?? null; }
     cardRect(i) {
         const m = this.m;
-        const x = m.L + 4 + m.cardW / 2 + i * (m.cardW + 6) - this.scroll, y = m.trayY;
+        const count = this.cards.length, total = count * (m.cardW + 6) - 6, inset = this.maxScroll > 0 ? 4 : (m.R - m.L - total) / 2;
+        const x = m.L + inset + m.cardW / 2 + i * (m.cardW + 6) - this.scroll, y = m.trayY;
         return { x, y, w: m.cardW, h: m.cardH };
     }
     inTray(x, y) { return y > this.m.B - this.m.trayH - 2 && !this.modal; }
@@ -119,9 +129,7 @@ export class Hud {
         this.sel = type;
         this.snd.tap();
         this.refreshCandidates();
-        const best = this.bestTile();
-        this.moveGhost(best, true);
-        this.o.onSelect?.(type);
+        this.moveGhost(this.startTile?.(type) ?? this.bestTile(), true);
     }
 
     deselect() {
@@ -158,7 +166,8 @@ export class Hud {
         const rings = [];
         for (const q of this.candidates) {
             const here = q.cell === this.tile;
-            const color = q.risk ? [0.32, 0.62, 1.05] : q.delta >= this.top && this.top > 0 ? [1.1, 0.8, 0.22] : q.delta > 0 ? [0.55, 0.95, 0.5] : [0.92, 0.95, 0.9];
+            const must = this.coach?.must ?? null, gold = must !== null ? q.cell === must : q.delta >= this.top && this.top > 0;
+            const color = q.risk ? [0.32, 0.62, 1.05] : gold ? [1.1, 0.8, 0.22] : q.delta > 0 ? [0.55, 0.95, 0.5] : [0.92, 0.95, 0.9];
             rings.push({ cell: q.cell, color: color, scale: here ? 1.03 : 0.94 });
         }
         // Whatever the coming storm would drown shows as a faint blue line, so the gaps in a coast can be read.
@@ -207,6 +216,7 @@ export class Hud {
         if (!c) return;
         const p = sim.preview(type, c);
         if (!p.ok) { this.snd.deny(); this.toast(p.why, { color: CORAL }); this.shakeBtn = 0.3; return; }
+        if (this.denyTile?.()) { this.shakeBtn = 0.3; return; }
         const before = sim.cheer, b = sim.place(type, c);
         if (!b) return;
         this.o.onPlace?.(b, c, p, sim.cheer - before);
@@ -258,6 +268,11 @@ export class Hud {
             this.scroll = clamp(this.scroll + this.scrollV * dt, 0, this.maxScroll);
             this.scrollV *= 1 - Math.min(1, dt * 5);
         }
+        if (!this.coach && !this.modal && this.sim.scn.goals.length && Math.floor(this.t * 2) !== Math.floor((this.t - dt) * 2)) {
+            this.next = nextAction(this.sim);
+            if (this.next && !this.cards.includes(this.next.card)) this.next = null;
+        }
+        this.coachCard = !this.coach && this.next && !this.sel ? this.next.card : null;
         for (const q of this.pops) q.t += dt;
         this.pops = this.pops.filter((q) => q.t < 1.3);
         for (const q of this.toasts) q.t += dt;
@@ -424,13 +439,27 @@ export class Hud {
         if (!this.o.noTray) this.drawTray(d);
         if (this.sel) this.drawPreview(d);
         else if (this.sheet !== null) this.drawSheet(d);
-        this.drawBubble(d);
+        if (this.coach) this.drawCoach(d); else this.drawBubble(d);
         this.drawToasts(d);
         for (const b of this.btns) if (!b.modal) this.drawBtn(d, b);
+        if (this.coach) this.drawPointer(d);
         if (this.modal) this.drawModal(d);
     }
 
     drawBtn(d, b) {
+        if (b.skip) {
+            this.panel(d, b.x, b.y, b.w, b.h, { color: PANEL });
+            this.text(d, "Skip", b.x, b.y, 13.5, "#fff");
+            return;
+        }
+        if (b.nextHint) {
+            const pulse = 0.5 + Math.sin(this.t * 3) * 0.5;
+            this.panel(d, b.x, b.y, b.w, b.h, { color: CARD, radius: 16 });
+            d.rect(b.w, b.h, { x: b.x, y: b.y, outline: 2, color: `#e0694a${Math.round(90 + pulse * 120).toString(16)}`, radius: 16 });
+            this.icon(d, "arrow", b.x - b.w / 2 + 18, b.y + Math.sin(this.t * 5) * 1.5, 18, true);
+            this.leftText(d, b.label, b.x - b.w / 2 + 34, b.y, Math.min(13.5, 13.5 * (b.w - 44) / widthOf(b.label, 13.5)));
+            return;
+        }
         if (b.plonk) {
             const ok = this.prev?.ok, pulse = ok ? 1 + Math.sin(this.t * 6) * 0.025 : 1, ox = this.shakeBtn > 0 ? Math.sin(this.t * 60) * 4 : 0, press = b.down ? 3 : 0;
             d.rect(b.w, b.h, { x: b.x + ox, y: b.y + 5, color: ok ? "#a84a30" : "#6c7f86", radius: 18 });
@@ -468,12 +497,12 @@ export class Hud {
         const pills = [
             ["coin", Math.round(this.shownCoins), this.bump.coin],
             ["wood", Math.round(this.shownWood), this.bump.wood],
-            ["fish", sim.fish, this.bump.fish],
-            ["grain", sim.grain, this.bump.grain],
+            ...(this.hide.food ? [] : [["fish", sim.fish, this.bump.fish], ["grain", sim.grain, this.bump.grain]]),
         ];
-        const pw = m.land ? 62 : 52, room = m.R - m.L - (this.o.noSpeed ? 40 : 84);
+        const pw = m.land ? 62 : 52, room = m.R - m.L - 84;
         const folkW = m.land ? 72 : 60;
         const w = Math.min(pw, (room - folkW - 4 * 3) / 4);
+        this.pillX = { coin: m.L + w / 2 - w / 2 + 12 };
         let x = m.L + w / 2;
         d.rect(pills.length * (w + 3) + folkW + 2, 32, { x: m.L + (pills.length * (w + 3) + folkW) / 2, y: top + 2, color: SHADOW, radius: 10 });
         d.rect(pills.length * (w + 3) + folkW + 2, 32, { x: m.L + (pills.length * (w + 3) + folkW) / 2, y: top, color: PANEL, radius: 10 });
@@ -487,6 +516,7 @@ export class Hud {
         const short = sim.spare <= 0 && sim.buildings.some((b) => !b.staffed);
         this.icon(d, "folk", fx - folkW / 2 + 11, top, 18);
         this.text(d, `${sim.spare}/${sim.folk}`, fx + 9, top, 13.5, short ? "#ffb49e" : "#fff");
+        if (this.hide.date) return;
         // Date, cheer, storm.
         const y2 = top + 26 + (m.land ? 2 : 3);
         const date = `${sim.season} · Day ${sim.day + 1}`;
@@ -516,24 +546,30 @@ export class Hud {
             this.icon(d, "wave", nx + 12, y2, 15);
             this.text(d, text, nx + fw / 2 + 8, y2, 12, "#fff");
         }
-        this.drawGoals(d, y2 + 13);
-        this.drawGauge(d, top);
+        if (!this.hide.goals) this.drawGoals(d, y2 + 13);
+        if (!this.hide.gauge) this.drawGauge(d, top);
     }
 
+    /** One goal at a time, big, with a bar. Dots show how many there are. */
     drawGoals(d, y0) {
         const sim = this.sim, m = this.m, goals = sim.scn.goals;
         if (!goals.length) return;
-        const lh = 19, pw = m.land ? 196 : Math.min(258, m.R - m.L - 30), h = goals.length * lh + 8;
-        d.rect(pw, h, { x: m.L + pw / 2, y: y0 + h / 2, color: "#ffffffb8", radius: 9 });
-        goals.forEach((g, i) => {
-            const y = y0 + 5 + i * lh + lh / 2, done = sim.goalDone[i], p = this.goalPulse[i] ?? 0;
-            if (done) this.icon(d, "check", m.L + 12, y, 15 * (1 + p));
-            else d.circle(5, { x: m.L + 12, y, color: "#20505c33" });
-            const val = Math.min(sim.goalValue(g), sim.goalTarget(g)), tg = sim.goalTarget(g);
-            const tail = done || g.type === "ride" ? "" : ` ${val}/${tg}`;
-            const str = g.text + tail, size = m.land ? 10.5 : 11.5;
-            this.leftText(d, str, m.L + 23, y, Math.min(size, (pw - 28) / (str.length * 0.54)), done ? "#4d8c6a" : INK);
+        const i = sim.goalDone.indexOf(false), pw = m.land ? 262 : Math.min(286, m.R - m.L - 30), h = 46, x0 = m.L, cx = x0 + pw / 2, cy = y0 + h / 2 + 2;
+        const pop = Math.max(0, ...this.goalPulse);
+        this.panel(d, cx, cy, pw + pop * 8, h + pop * 4, { color: pop > 0 ? "#fff3c9" : CARD, radius: 11 });
+        goals.forEach((g, k) => {
+            const x = x0 + pw - 12 - (goals.length - 1 - k) * 14;
+            if (sim.goalDone[k]) this.icon(d, "check", x, cy - 12, 14);
+            else d.circle(4, { x, y: cy - 12, color: k === i ? CORAL : "#20505c33" });
         });
+        if (i < 0) { this.leftText(d, "All goals done!", x0 + 12, cy, 15, "#3d8a5f"); return; }
+        const g = goals[i], val = Math.min(sim.goalValue(g), sim.goalTarget(g)), tg = sim.goalTarget(g);
+        const room = pw - 24 - goals.length * 14, size = Math.min(14, 14 * room / widthOf(g.text, 14));
+        this.leftText(d, g.text, x0 + 12, cy - 11, Math.max(12.5, size));
+        const bw = pw - 70, by = cy + 10, k = val / tg;
+        d.rect(bw, 9, { x: x0 + 12 + bw / 2, y: by, color: "#20505c22", radius: 4.5 });
+        if (k > 0) d.rect(Math.max(9, bw * k), 9, { x: x0 + 12 + Math.max(9, bw * k) / 2, y: by, color: TEAL, radius: 4.5 });
+        if (g.type !== "ride") this.text(d, `${val}/${tg}`, x0 + pw - 28, by, 12.5);
     }
 
     /** The tide staff: land heights as coloured bands, the sea as a rising fill. */
@@ -556,25 +592,26 @@ export class Hud {
 
     drawTray(d) {
         const m = this.m, sim = this.sim;
-        d.rect(m.R - m.L + 8, m.trayH + 8, { x: m.cx, y: m.trayY + 4, color: "#20505cb0", radius: 16 });
+        d.rect(m.R - m.L + 8, m.trayH + 8, { x: m.cx, y: m.trayY + 4, color: "#20505c70", radius: 16 });
         d.clip(m.L, m.B - m.trayH - 22, m.R - m.L, m.trayH + 28, () => {
             this.cards.forEach((t, i) => {
                 const r = this.cardRect(i), on = this.sel === t, B = BUILDINGS[t];
                 if (r.x < m.L - r.w || r.x > m.R + r.w) return;
                 const can = sim.coins >= B.cost[0] && sim.wood >= B.cost[1];
                 const dy = on ? -10 : 0, coach = this.coachCard === t ? Math.sin(this.t * 7) * 3 - 3 : 0;
-                this.panel(d, r.x, r.y + dy + coach, r.w, r.h, { color: on ? "#ffe9a8" : CARD, radius: 11 });
+                this.panel(d, r.x, r.y + dy + coach, r.w, r.h, { radius: 11 });
+                if (on) d.rect(r.w + 3, r.h + 3, { x: r.x, y: r.y + dy, outline: 3, color: "#f0b43c", radius: 13 });
                 if (this.coachCard === t) d.rect(r.w + 4, r.h + 4, { x: r.x, y: r.y + coach, outline: 3, color: CORAL, radius: 13 });
                 const size = r.w - 8, y = r.y + dy + coach - (r.h > 70 ? 11 : 9);
                 this.cardArt(d, t, r.x, y, Math.min(size, r.h - 26), can);
                 const py = r.y + dy + coach + r.h / 2 - 12;
                 let px = r.x - 24;
                 this.icon(d, "coin", px + 6, py, 12, false, can ? undefined : "#ffffff88");
-                this.text(d, String(B.cost[0]), px + 19, py, 11.5, sim.coins >= B.cost[0] ? INK : "#b64a36");
+                this.text(d, String(B.cost[0]), px + 19, py, 13, sim.coins >= B.cost[0] ? INK : "#b64a36");
                 px += 28;
                 if (B.cost[1]) {
                     this.icon(d, "wood", px + 6, py, 12, false, can ? undefined : "#ffffff88");
-                    this.text(d, String(B.cost[1]), px + 18, py, 11.5, sim.wood >= B.cost[1] ? INK : "#b64a36");
+                    this.text(d, String(B.cost[1]), px + 18, py, 13, sim.wood >= B.cost[1] ? INK : "#b64a36");
                 }
             });
         });
@@ -592,43 +629,60 @@ export class Hud {
         if (!p) return;
         const plonkW = m.land ? 88 : 104, w = m.land ? 186 : m.R - m.L - plonkW - 10, x0 = m.R - plonkW - 10 - w, y = m.B - m.trayH - 42, cx = x0 + w / 2;
         this.panel(d, cx, y, w, 66, { radius: 14 });
-        const size = w > 250 ? 15 : 14;
-        this.leftText(d, B.name, x0 + 10, y - 20, size);
-        // The stars this tile earns, big and readable.
-        for (let i = 0; i < MAX_STARS; i++) d.sprite("iconsDark", { frame: i < p.stars ? ICON.star : ICON.starOff, x: x0 + 18 + i * 19, y: y + 2, width: 20, height: 20, color: i < p.stars ? undefined : "#20505c30" });
-        const wall = this.sel === "wall", score = wall ? p.saves + (this.gaps?.has(this.tile) && !p.saves ? 1 : 0) : p.delta, sign = score > 0 ? "+" : "";
+        const wall = this.sel === "wall", gapBonus = wall && this.gaps?.has(this.tile) && !p.saves ? 1 : 0, score = wall ? p.saves + gapBonus : p.delta;
         const tx = x0 + w - 28;
         d.rect(46, 30, { x: tx, y: y - 14, color: score > 0 ? "#3aa76a" : score < 0 ? CORAL : "#9fb3b4", radius: 9 });
-        this.text(d, `${sign}${score}`, tx, y - 14, 19, "#fff");
-        let line;
-        if (!p.ok) line = p.why;
-        else if (wall) line = p.saves ? `Keeps ${p.saves} tile${p.saves > 1 ? "s" : ""} dry at level ${this.sim.testLevel.toFixed(1)}` : this.gaps?.has(this.tile) ? `A gap: ${this.gaps.size} to plug against ${this.sim.testLevel.toFixed(1)}` : `Holds to ${p.safe.toFixed(0)}. No gap here`;
-        else if (p.atRisk) line = `Floods above ${p.safe.toFixed(1)}, storm is ${this.sim.nextStorm.level.toFixed(1)}`;
-        else if (this.sim.spare < B.staff) line = "No spare folk: it would sit idle";
-        else line = p.output;
-        const color = !p.ok ? "#b64a36" : p.atRisk ? "#2a6fc4" : this.sim.spare < B.staff ? "#b64a36" : "#4d7c7f";
-        const fit = Math.min(12.5, (w - 18) / (line.length * 0.54));
-        this.leftText(d, line, x0 + 10, y + 22, fit, color);
+        this.text(d, `${score > 0 ? "+" : ""}${score}`, tx, y - 14, 19, "#fff");
+        const room = w - 74, head = B.name, hs = Math.min(15, 15 * room / widthOf(head, 15));
+        this.leftText(d, head, x0 + 10, y - 21, hs);
+        for (let i = 0; i < MAX_STARS; i++) d.sprite("iconsDark", { frame: i < p.stars ? ICON.star : ICON.starOff, x: x0 + 18 + i * 17, y: y - 1, width: 17, height: 17, color: i < p.stars ? undefined : "#20505c30" });
+        // Why this tile is good or bad, before it is placed.
+        let line, color = "#4d7c7f";
+        if (!p.ok) { line = p.why; color = "#b64a36"; }
+        else if (wall) line = p.saves ? `Keeps ${p.saves} tile${p.saves > 1 ? "s" : ""} dry at level ${this.sim.testLevel.toFixed(1)}` : gapBonus ? `A gap: ${this.gaps.size} to plug against ${this.sim.testLevel.toFixed(1)}` : `Holds to ${p.safe.toFixed(0)}. No gap here`;
+        else if (p.atRisk) { line = `Floods above ${p.safe.toFixed(1)}, storm is ${this.sim.nextStorm.level.toFixed(1)}`; color = "#2a6fc4"; }
+        else if (this.sim.spare < B.staff) { line = "No spare folk: it would sit idle"; color = "#b64a36"; }
+        else {
+            const why = new Map();
+            const brief = (n) => n.replace(/^(Harbour|Fishing|Sea|The Salty) /, "");
+            for (const q of p.parts) why.set(brief(q.label), (why.get(brief(q.label)) ?? 0) + q.v);
+            const list = [...why].map(([k, v]) => `${k} ${v > 0 ? "+" : "-"}${Math.abs(v)}`);
+            line = list.length ? list.join(", ") : "Nothing useful beside it";
+            while (list.length > 1 && widthOf(line, 12.5) > w - 62) { list.pop(); line = `${list.join(", ")}...`; }
+            if (!list.length) color = "#b0683a";
+            const ox = x0 + 14 + MAX_STARS * 17;
+            if (ox + widthOf(p.output, 13) < tx - 26) d.text(p.output, { x: ox + widthOf(p.output, 13) / 2, y: y - 1, size: 13, bold: true, font: FONT, color: "#4d7c7f" });
+        }
+        this.leftText(d, line, x0 + 10, y + 21, Math.max(12.5, Math.min(13, 13 * (w - 56) / widthOf(line, 13))), color);
     }
 
     drawRingChips(d) {
         const cam = this.s.cam3;
         // Neighbours light up with what this tile would give or take.
-        const p = this.prev;
+        const p = this.prev, sim = this.sim, must = this.coach?.must ?? null;
+        // Every tile shows its score up front, so the choice is obvious before anything is placed.
+        for (const q of this.candidates) {
+            if (q.cell === this.tile) continue;
+            const c = sim.cells[q.cell], t = cam.project([c.x, this.w.surface(c) + 0.1, c.z]);
+            const gold = must !== null ? q.cell === must : q.delta >= this.top && this.top > 0;
+            const fill = q.risk ? "#3f7fd0e0" : gold ? "#f0b43cf2" : q.delta > 0 ? "#3aa76ad8" : q.delta < 0 ? "#c2543ee0" : "#ffffffb8";
+            d.rect(28, 20, { x: t.x, y: t.y, color: fill, radius: 10 });
+            this.text(d, `${q.delta > 0 ? "+" : ""}${q.delta}`, t.x, t.y, 13, q.delta === 0 && !q.risk ? INK : gold ? INK : "#fff");
+        }
         if (p && this.tile !== null) {
             const seen = new Map();
-            for (const q of p.parts) if (q.cell !== this.tile) seen.set(q.cell, (seen.get(q.cell) ?? 0) + q.v);
+            for (const q of p.parts) if (q.cell !== this.tile && !this.candidates.some((k) => k.cell === q.cell)) seen.set(q.cell, (seen.get(q.cell) ?? 0) + q.v);
             for (const q of p.links) seen.set(q.cell, (seen.get(q.cell) ?? 0) + q.v);
             for (const [cell, v] of seen) {
                 const c = this.sim.cells[cell], t = cam.project([c.x, this.w.surface(c) + 0.55, c.z]);
                 const good = v > 0;
-                d.rect(30, 19, { x: t.x, y: t.y, color: good ? "#2f8f5e" : "#c2543e", radius: 9 });
-                this.text(d, `${good ? "+" : ""}${v}`, t.x, t.y, 12.5, "#fff");
+                d.rect(30, 20, { x: t.x, y: t.y, color: good ? "#2f8f5e" : "#c2543e", radius: 10 });
+                this.text(d, `${good ? "+" : ""}${v}`, t.x, t.y, 13, "#fff");
             }
-            const c = this.sim.cells[this.tile], t = cam.project([c.x, this.w.surface(c) + 1.5, c.z]);
+            const c = this.sim.cells[this.tile], t = cam.project([c.x, this.w.surface(c) + 1.7, c.z]);
             const score = this.sel === "wall" ? p.saves + (this.gaps?.has(this.tile) && !p.saves ? 1 : 0) : p.delta;
-            d.rect(40, 26, { x: t.x, y: t.y + Math.sin(this.t * 4.4) * 3, color: score > 0 ? "#ffcf4a" : score < 0 ? "#ffb49e" : CARD, radius: 12 });
-            this.text(d, `${score > 0 ? "+" : ""}${score}`, t.x, t.y + Math.sin(this.t * 4.4) * 3, 17, INK);
+            d.rect(34, 22, { x: t.x, y: t.y + Math.sin(this.t * 4.4) * 3, color: score > 0 ? "#ffcf4a" : score < 0 ? "#ffb49e" : CARD, radius: 12 });
+            this.text(d, `${score > 0 ? "+" : ""}${score}`, t.x, t.y + Math.sin(this.t * 4.4) * 3, 15, INK);
         }
     }
 
@@ -669,9 +723,54 @@ export class Hud {
         this.panel(d, cx, y, w, 66, { radius: 14 });
         this.leftText(d, B.name, x0 + 10, y - 20, 15);
         for (let i = 0; i < MAX_STARS; i++) d.sprite("iconsDark", { frame: i < b.stars ? ICON.star : ICON.starOff, x: x0 + 18 + i * 19, y: y + 2, width: 20, height: 20, color: i < b.stars ? undefined : "#20505c30" });
-        const state = b.wrecked ? "Wrecked. Crews will mend it when they can pay" : b.wet ? "Under water!" : b.soak ? "Drying out" : !b.connected ? "Not linked to the Hall" : !b.staffed ? "No folk to work here" : this.sim.outputOf(b.type, b.stars) || B.blurb;
+        const state = b.wrecked ? "Wrecked. Crews will mend it" : b.wet ? "Under water!" : b.soak ? "Drying out" : !b.connected ? "Not linked to the Hall" : !b.staffed ? "No folk to work here" : this.sim.outputOf(b.type, b.stars) || B.blurb;
         const fit = Math.min(12.5, (w - 18) / (state.length * 0.54));
         this.leftText(d, state, x0 + 10, y + 22, fit, b.wrecked || !b.connected || !b.staffed ? "#b64a36" : "#4d7c7f");
+    }
+
+    /** The lesson: a few words beside the thumb, a dot for each lesson, and an arrow at the thing to touch. */
+    drawCoach(d) {
+        const c = this.coach, m = this.m, size = m.land ? 15 : 16;
+        const side = m.land && this.sel, w = side ? Math.min(m.R - m.L - 310, 330) : Math.min(m.R - m.L, 344), maxW = w - 66;
+        const fit = Math.min(size, size * maxW * 2 / (widthOf(c.text, size) + 30));
+        const words = c.text.split(" "), lines = [""];
+        for (const word of words) {
+            const l = lines[lines.length - 1], next = l ? `${l} ${word}` : word;
+            if (widthOf(next, fit) > maxW) lines.push(word); else lines[lines.length - 1] = next;
+        }
+        const h = Math.max(54, lines.length * (fit + 4) + 24), room = this.sel && !side ? 84 : 10, y = m.B - (this.o.noTray ? 0 : m.trayH) - room - h / 2, x0 = side ? m.L : m.cx - w / 2;
+        this.panel(d, x0 + w / 2, y, w, h, { radius: 14 });
+        d.sprite("nell", { x: x0 + 26, y, width: 42, height: 42 });
+        lines.forEach((l, i) => this.leftText(d, l, x0 + 54, y - 6 + (i - (lines.length - 1) / 2) * (fit + 4), fit));
+        for (let i = 1; i <= c.of; i++) d.circle(3.5, { x: x0 + 56 + (i - 1) * 11, y: y + h / 2 - 9, color: i <= c.n ? CORAL : "#20505c26" });
+    }
+
+    drawPointer(d) {
+        const c = this.coach, t = c.target, m = this.m, cam = this.s.cam3, sim = this.sim;
+        if (c.link) {
+            // The missing link, as a marching line of dots from dock through the tile to the Hall.
+            for (let i = 0; i < c.link.length - 1; i++) {
+                const a = c.link[i], b = c.link[i + 1];
+                for (let k = 0; k < 5; k++) {
+                    const f = (k + (this.t * 1.6) % 1) / 5, p = cam.project([a.x + (b.x - a.x) * f, 0.42, a.z + (b.z - a.z) * f]);
+                    d.circle(3.5, { x: p.x, y: p.y, color: "#ffcf4a" });
+                }
+            }
+        }
+        if (!t) return;
+        let x = null, y = null, r = 30;
+        if (t.card) { const i = this.cards.indexOf(t.card); if (i >= 0) { const q = this.cardRect(i); x = q.x; y = q.y - q.h / 2 - 2; } }
+        else if (t.btn) { const b = this.btn(t.btn); if (b) { x = b.x; y = b.y - b.h / 2 - 2; } }
+        else if (t.tile !== undefined && t.tile !== null) { const q = sim.cells[t.tile], p = cam.project([q.x, this.w.surface(q) + 0.1, q.z]); x = p.x; y = p.y - 8; r = 22; }
+        else if (t.pill) { x = m.L + 14; y = m.T + 34; }
+        else if (t.gauge) { x = m.R - 9; y = m.T + 62; }
+        else if (t.boat) { const b = this.w.boats.values().next().value; if (b) { const p = cam.project([b.x, 0.2, b.z]); x = p.x; y = p.y - 8; r = 20; } }
+        if (x === null) return;
+        const k = (this.t * 1.5) % 1;
+        const up = t.pill || t.gauge;
+        if (!t.card && !t.btn) d.circle(r * (0.7 + k * 0.6), { x, y: y + 8, outline: 3, color: `#e0694a${Math.round((1 - k) * 200 + 16).toString(16).padStart(2, "0")}` });
+        const bob = Math.abs(Math.sin(this.t * 5)) * 8;
+        d.sprite("iconsDark", { frame: ICON.arrow, x, y: up ? y + 22 + bob : y - (t.tile !== undefined ? 19 : 16) - bob, width: 34, height: 34, rot: up ? Math.PI : 0 });
     }
 
     drawBubble(d) {

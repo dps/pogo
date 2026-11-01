@@ -1,5 +1,5 @@
 // The painted UI: small icons with one light direction, plus the logo and Nell the harbour master.
-export const ICON = { coin: 0, wood: 1, fish: 2, grain: 3, folk: 4, star: 5, starOff: 6, drop: 7, cog: 8, pause: 9, play: 10, ff: 11, check: 12, lock: 13, link: 14, hammer: 15, zed: 16, cheer: 17, wave: 18, close: 19, bin: 20, spin: 21 };
+export const ICON = { coin: 0, wood: 1, fish: 2, grain: 3, folk: 4, star: 5, starOff: 6, drop: 7, cog: 8, pause: 9, play: 10, ff: 11, check: 12, lock: 13, link: 14, hammer: 15, zed: 16, cheer: 17, wave: 18, close: 19, bin: 20, spin: 21, arrow: 22 };
 
 function paintIcon(p, f, c) {
     const x = (f % 6) * 72 + 36, y = Math.floor(f / 6) * 72 + 36;
@@ -102,6 +102,10 @@ function paintIcon(p, f, c) {
             p.rect(X(-16), Y(-10), 32, 34, "#c2543e"); p.rect(X(-20), Y(-16), 40, 6, "#8e3a2a"); p.rect(X(-7), Y(-22), 14, 6, "#8e3a2a");
             p.rect(X(-8), Y(-4), 4, 22, "#ffb9a6"); p.rect(X(4), Y(-4), 4, 22, "#ffb9a6");
             break;
+        case "arrow":
+            p.poly([[X(-13), Y(-27)], [X(13), Y(-27)], [X(13), Y(0)], [X(26), Y(0)], [X(0), Y(28)], [X(-26), Y(0)], [X(-13), Y(0)]], "#ffffff");
+            p.poly([[X(-8), Y(-22)], [X(8), Y(-22)], [X(8), Y(5)], [X(16), Y(5)], [X(0), Y(21)], [X(-16), Y(5)], [X(-8), Y(5)]], "#e0694a");
+            break;
         case "spin":
             p.line(X(-22), Y(4), X(-12), Y(-14), c, 6); p.line(X(-12), Y(-14), X(12), Y(-14), c, 6); p.line(X(12), Y(-14), X(22), Y(4), c, 6);
             p.poly([[X(14), Y(4)], [X(30), Y(4)], [X(22), Y(16)]], c);
@@ -113,11 +117,11 @@ function paintIcon(p, f, c) {
 export function paintArt(game) {
     const a = game.assets;
     a.paint("icons", 432, 288, (p) => {
-        for (let f = 0; f < 22; f++) paintIcon(p, f, "#ffffff");
+        for (let f = 0; f < 23; f++) paintIcon(p, f, "#ffffff");
     }, { smooth: true });
     a.grid("icons", 6, 4);
     a.paint("iconsDark", 432, 288, (p) => {
-        for (let f = 0; f < 22; f++) paintIcon(p, f, "#245766");
+        for (let f = 0; f < 23; f++) paintIcon(p, f, "#245766");
     }, { smooth: true });
     a.grid("iconsDark", 6, 4);
     a.paint("halo", 64, 64, (p) => {

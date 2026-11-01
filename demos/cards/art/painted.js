@@ -1,0 +1,227 @@
+// Generated art, cleaned by pogo art and embedded as modules. [sprite name, data URL, width, height]
+import a0 from "./p/bg_0.js";
+import a1 from "./p/bg_1.js";
+import a2 from "./p/bg_2.js";
+import a3 from "./p/bg_3.js";
+import a4 from "./p/bg_title.js";
+import a5 from "./p/cb_forest.js";
+import a6 from "./p/cb_frost.js";
+import a7 from "./p/cb_hearth.js";
+import a8 from "./p/cb_night.js";
+import a9 from "./p/cb_sea.js";
+import a10 from "./p/cb_stars.js";
+import a11 from "./p/cb_swamp.js";
+import a12 from "./p/cb_vault.js";
+import a13 from "./p/foe_batchoir.js";
+import a14 from "./p/foe_bellwraith.js";
+import a15 from "./p/foe_codex.js";
+import a16 from "./p/foe_crow.js";
+import a17 from "./p/foe_gargoyle.js";
+import a18 from "./p/foe_ghoul.js";
+import a19 from "./p/foe_gristle.js";
+import a20 from "./p/foe_hollow.js";
+import a21 from "./p/foe_imp.js";
+import a22 from "./p/foe_inkblot.js";
+import a23 from "./p/foe_mold.js";
+import a24 from "./p/foe_mothswarm.js";
+import a25 from "./p/foe_overdue.js";
+import a26 from "./p/foe_pickle.js";
+import a27 from "./p/foe_quill.js";
+import a28 from "./p/foe_rat.js";
+import a29 from "./p/foe_ropehag.js";
+import a30 from "./p/foe_sister.js";
+import a31 from "./p/foe_sprite.js";
+import a32 from "./p/foe_stag.js";
+import a33 from "./p/foe_stormcrow.js";
+import a34 from "./p/foe_thorn.js";
+import a35 from "./p/foe_turnip.js";
+import a36 from "./p/foe_verger.js";
+import a37 from "./p/foe_weatherhex.js";
+import a38 from "./p/foe_wight.js";
+import a39 from "./p/foe_worm.js";
+import a40 from "./p/foe_ysolde.js";
+import a41 from "./p/logs.js";
+import a42 from "./p/m_acorn.js";
+import a43 from "./p/m_bell.js";
+import a44 from "./p/m_bellows.js";
+import a45 from "./p/m_bolt.js";
+import a46 from "./p/m_bone.js";
+import a47 from "./p/m_book.js";
+import a48 from "./p/m_bubble.js";
+import a49 from "./p/m_candle.js";
+import a50 from "./p/m_cardart.js";
+import a51 from "./p/m_cat.js";
+import a52 from "./p/m_cloud.js";
+import a53 from "./p/m_clover.js";
+import a54 from "./p/m_coal.js";
+import a55 from "./p/m_coin.js";
+import a56 from "./p/m_crown.js";
+import a57 from "./p/m_crystal.js";
+import a58 from "./p/m_dice.js";
+import a59 from "./p/m_drop.js";
+import a60 from "./p/m_egg.js";
+import a61 from "./p/m_eye.js";
+import a62 from "./p/m_feather.js";
+import a63 from "./p/m_fish.js";
+import a64 from "./p/m_flame.js";
+import a65 from "./p/m_flask.js";
+import a66 from "./p/m_flower.js";
+import a67 from "./p/m_hand.js";
+import a68 from "./p/m_hat.js";
+import a69 from "./p/m_heart.js";
+import a70 from "./p/m_hourglass.js";
+import a71 from "./p/m_icicle.js";
+import a72 from "./p/m_kelp.js";
+import a73 from "./p/m_kettle.js";
+import a74 from "./p/m_key.js";
+import a75 from "./p/m_leaf.js";
+import a76 from "./p/m_lizard.js";
+import a77 from "./p/m_match.js";
+import a78 from "./p/m_mirror.js";
+import a79 from "./p/m_moon.js";
+import a80 from "./p/m_mushroom.js";
+import a81 from "./p/m_nettle.js";
+import a82 from "./p/m_orb.js";
+import a83 from "./p/m_pepper.js";
+import a84 from "./p/m_pin.js";
+import a85 from "./p/m_poppet.js";
+import a86 from "./p/m_pouch.js";
+import a87 from "./p/m_rat.js";
+import a88 from "./p/m_raven.js";
+import a89 from "./p/m_ring.js";
+import a90 from "./p/m_root.js";
+import a91 from "./p/m_salt.js";
+import a92 from "./p/m_scales.js";
+import a93 from "./p/m_shell.js";
+import a94 from "./p/m_shield.js";
+import a95 from "./p/m_skull.js";
+import a96 from "./p/m_snake.js";
+import a97 from "./p/m_snow.js";
+import a98 from "./p/m_spider.js";
+import a99 from "./p/m_spoon.js";
+import a100 from "./p/m_star.js";
+import a101 from "./p/m_sun.js";
+import a102 from "./p/m_teacup.js";
+import a103 from "./p/m_tentacle.js";
+import a104 from "./p/m_toad.js";
+import a105 from "./p/m_tooth.js";
+import a106 from "./p/m_vine.js";
+import a107 from "./p/m_wave.js";
+import a108 from "./p/pot.js";
+import a109 from "./p/witch_posy.js";
+import a110 from "./p/witch_thistle.js";
+import a111 from "./p/witch_vesper.js";
+export const PAINTED = [
+    ["bg_0", a0, 480, 640],
+    ["bg_1", a1, 480, 640],
+    ["bg_2", a2, 480, 640],
+    ["bg_3", a3, 480, 640],
+    ["bg_title", a4, 480, 640],
+    ["cb_forest", a5, 300, 225],
+    ["cb_frost", a6, 300, 225],
+    ["cb_hearth", a7, 300, 225],
+    ["cb_night", a8, 300, 225],
+    ["cb_sea", a9, 300, 225],
+    ["cb_stars", a10, 300, 225],
+    ["cb_swamp", a11, 300, 225],
+    ["cb_vault", a12, 300, 225],
+    ["foe_batchoir", a13, 300, 300],
+    ["foe_bellwraith", a14, 300, 300],
+    ["foe_codex", a15, 300, 300],
+    ["foe_crow", a16, 300, 300],
+    ["foe_gargoyle", a17, 300, 300],
+    ["foe_ghoul", a18, 300, 300],
+    ["foe_gristle", a19, 300, 300],
+    ["foe_hollow", a20, 300, 300],
+    ["foe_imp", a21, 300, 300],
+    ["foe_inkblot", a22, 300, 300],
+    ["foe_mold", a23, 300, 300],
+    ["foe_mothswarm", a24, 300, 300],
+    ["foe_overdue", a25, 300, 300],
+    ["foe_pickle", a26, 300, 300],
+    ["foe_quill", a27, 300, 300],
+    ["foe_rat", a28, 300, 300],
+    ["foe_ropehag", a29, 300, 300],
+    ["foe_sister", a30, 300, 300],
+    ["foe_sprite", a31, 300, 300],
+    ["foe_stag", a32, 300, 300],
+    ["foe_stormcrow", a33, 300, 300],
+    ["foe_thorn", a34, 300, 300],
+    ["foe_turnip", a35, 300, 300],
+    ["foe_verger", a36, 300, 300],
+    ["foe_weatherhex", a37, 300, 300],
+    ["foe_wight", a38, 300, 300],
+    ["foe_worm", a39, 300, 300],
+    ["foe_ysolde", a40, 300, 300],
+    ["logs", a41, 240, 120],
+    ["m_acorn", a42, 180, 180],
+    ["m_bell", a43, 180, 180],
+    ["m_bellows", a44, 180, 180],
+    ["m_bolt", a45, 180, 180],
+    ["m_bone", a46, 180, 180],
+    ["m_book", a47, 180, 180],
+    ["m_bubble", a48, 180, 180],
+    ["m_candle", a49, 180, 180],
+    ["m_cardart", a50, 180, 180],
+    ["m_cat", a51, 180, 180],
+    ["m_cloud", a52, 180, 180],
+    ["m_clover", a53, 180, 180],
+    ["m_coal", a54, 180, 180],
+    ["m_coin", a55, 180, 180],
+    ["m_crown", a56, 180, 180],
+    ["m_crystal", a57, 180, 180],
+    ["m_dice", a58, 180, 180],
+    ["m_drop", a59, 180, 180],
+    ["m_egg", a60, 180, 180],
+    ["m_eye", a61, 180, 180],
+    ["m_feather", a62, 180, 180],
+    ["m_fish", a63, 180, 180],
+    ["m_flame", a64, 180, 180],
+    ["m_flask", a65, 180, 180],
+    ["m_flower", a66, 180, 180],
+    ["m_hand", a67, 180, 180],
+    ["m_hat", a68, 180, 180],
+    ["m_heart", a69, 180, 180],
+    ["m_hourglass", a70, 180, 180],
+    ["m_icicle", a71, 180, 180],
+    ["m_kelp", a72, 180, 180],
+    ["m_kettle", a73, 180, 180],
+    ["m_key", a74, 180, 180],
+    ["m_leaf", a75, 180, 180],
+    ["m_lizard", a76, 180, 180],
+    ["m_match", a77, 180, 180],
+    ["m_mirror", a78, 180, 180],
+    ["m_moon", a79, 180, 180],
+    ["m_mushroom", a80, 180, 180],
+    ["m_nettle", a81, 180, 180],
+    ["m_orb", a82, 180, 180],
+    ["m_pepper", a83, 180, 180],
+    ["m_pin", a84, 180, 180],
+    ["m_poppet", a85, 180, 180],
+    ["m_pouch", a86, 180, 180],
+    ["m_rat", a87, 180, 180],
+    ["m_raven", a88, 180, 180],
+    ["m_ring", a89, 180, 180],
+    ["m_root", a90, 180, 180],
+    ["m_salt", a91, 180, 180],
+    ["m_scales", a92, 180, 180],
+    ["m_shell", a93, 180, 180],
+    ["m_shield", a94, 180, 180],
+    ["m_skull", a95, 180, 180],
+    ["m_snake", a96, 180, 180],
+    ["m_snow", a97, 180, 180],
+    ["m_spider", a98, 180, 180],
+    ["m_spoon", a99, 180, 180],
+    ["m_star", a100, 180, 180],
+    ["m_sun", a101, 180, 180],
+    ["m_teacup", a102, 180, 180],
+    ["m_tentacle", a103, 180, 180],
+    ["m_toad", a104, 180, 180],
+    ["m_tooth", a105, 180, 180],
+    ["m_vine", a106, 180, 180],
+    ["m_wave", a107, 180, 180],
+    ["pot", a108, 520, 520],
+    ["witch_posy", a109, 340, 432],
+    ["witch_thistle", a110, 340, 432],
+    ["witch_vesper", a111, 340, 432],
+];

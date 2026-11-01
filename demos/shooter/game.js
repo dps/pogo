@@ -37,11 +37,11 @@ const PITCH_MAX = 1.3, SIGHT = 34, WAKE_R = 16, CULL_R = 46;
 const FONT = "Impact, 'Arial Black', 'Helvetica Neue', system-ui, sans-serif";
 
 const WEAPONS = [
-    { id: "pea", name: "Pea Shooter", icon: 10, ammo: null, cd: 0.25, dmg: 18, pellets: 1, spread: 0.004, kick: 0.016, vm: 18, shake: 0, sprite: "vm0", flash: 0, flashAt: [-2, -100], flashS: 0.3, sound: "pea", color: "#b6ff7a", tracer: 0.5 },
-    { id: "buss", name: "Thornbuss", icon: 11, ammo: "thorns", cd: 0.68, dmg: 12, pellets: 10, spread: 0.062, kick: 0.075, vm: 54, shake: 0.09, sprite: "vm1", flash: 1, flashAt: [0, -76], flashS: 0.62, sound: "buss", color: "#d8ff8a", tracer: 0.4, knock: 10 },
-    { id: "hose", name: "Hornet Hose", icon: 12, ammo: "hornets", cd: 0.08, dmg: 8, pellets: 1, spread: 0.026, kick: 0.009, vm: 10, shake: 0.018, sprite: "vm2", flash: 1, flashAt: [0, -86], flashS: 0.36, sound: "hose", color: "#ffd24a", tracer: 1, knock: 1.4 },
-    { id: "mortar", name: "Pumpkin Mortar", icon: 13, ammo: "pumpkins", cd: 0.8, proj: true, kick: 0.08, vm: 40, shake: 0.08, sprite: "vm3", flash: 2, flashAt: [0, -64], flashS: 0.66, sound: "mortar", color: "#ffa42c" },
-    { id: "zap", name: "Bug Zapper", icon: 14, ammo: "bulbs", cd: 0.52, dmg: 75, pellets: 1, spread: 0, pierce: true, kick: 0.04, vm: 22, shake: 0.05, sprite: "vm4", flash: 3, flashAt: [-2, -56], flashS: 0.6, sound: "zap", color: "#7df0ff", tracer: 1, knock: 5 },
+    { id: "pea", name: "Pea Shooter", icon: 10, ammo: null, cd: 0.25, dmg: 18, pellets: 1, spread: 0.004, kick: 0.016, vm: 18, shake: 0, sprite: "vm0", flash: 0, flashAt: [-145, -105], flashS: 0.3, sound: "pea", color: "#b6ff7a", tracer: 0.5 },
+    { id: "buss", name: "Thornbuss", icon: 11, ammo: "thorns", cd: 0.68, dmg: 12, pellets: 10, spread: 0.062, kick: 0.075, vm: 54, shake: 0.09, sprite: "vm1", flash: 1, flashAt: [-45, -88], flashS: 0.62, sound: "buss", color: "#d8ff8a", tracer: 0.4, knock: 10 },
+    { id: "hose", name: "Hornet Hose", icon: 12, ammo: "hornets", cd: 0.08, dmg: 8, pellets: 1, spread: 0.026, kick: 0.009, vm: 10, shake: 0.018, sprite: "vm2", flash: 1, flashAt: [-133, -113], flashS: 0.36, sound: "hose", color: "#ffd24a", tracer: 1, knock: 1.4 },
+    { id: "mortar", name: "Pumpkin Mortar", icon: 13, ammo: "pumpkins", cd: 0.8, proj: true, kick: 0.08, vm: 40, shake: 0.08, sprite: "vm3", flash: 2, flashAt: [-132, -103], flashS: 0.66, sound: "mortar", color: "#ffa42c" },
+    { id: "zap", name: "Bug Zapper", icon: 14, ammo: "bulbs", cd: 0.52, dmg: 75, pellets: 1, spread: 0, pierce: true, kick: 0.04, vm: 22, shake: 0.05, sprite: "vm4", flash: 3, flashAt: [-73, -60], aimDrop: 0.16, flashS: 0.6, sound: "zap", color: "#7df0ff", tracer: 1, knock: 5 },
 ];
 const AMMO_MAX = { thorns: 40, hornets: 240, pumpkins: 16, bulbs: 24 };
 
@@ -1355,15 +1355,21 @@ game.scene("play", (s, args) => {
         name: "viewmodel", layer: -5,
         update(dt, e) {
             const v = s.view;
-            const h = Math.min(v.height * 0.8, v.width * 0.74), wide = h * 4 / 3, land = v.width > v.height;
+            // The art looks along each barrel towards the upper left, so put the muzzle on the line that runs through the
+            // crosshair, and scale until the arms reach the bottom of the screen. Sprite units are 320 by 240.
+            const wp = WEAPONS[run.cur], [fx, fy] = wp.flashAt, gap = Math.min(v.width, v.height) * 0.09;
+            const tall = v.height > v.width ? 0.14 : 0; // a lower muzzle keeps the gun on a narrow screen
+            const tx = v.width / 2 + gap, ty = v.height / 2 + gap + v.height * ((wp.aimDrop ?? 0) + tall);
+            const k = (v.height - ty) / (120 - fy), h = 240 * k, wide = 320 * k;
             const bobX = Math.cos(w.bob) * 10 * w.bobA, bobY = Math.abs(Math.sin(w.bob)) * 8 * w.bobA;
             const fall = Math.max(-1, Math.min(1, player.vel.y / 14)) * 7;
             w.swayX += (-s.input.look.x * 0.5 - w.swayX) * Math.min(1, 10 * dt);
             w.swayY += (-s.input.look.y * 0.3 - w.swayY) * Math.min(1, 10 * dt);
-            const raise = s.input.touchMode && !land ? 166 : 0;
-            e.pos.x = v.width / 2 + wide * (land ? 0.27 : 0.16) + bobX + w.swayX;
-            e.pos.y = v.height - h * 0.3 + bobY + fall + w.swayY + w.vmKick * (h / 240) + w.swap * h * 0.8 - raise;
-            e.angle = -0.17 + w.vmKick * 0.0012;
+            // Recoil drives the gun back along its barrel, towards the hands, and tips the muzzle up.
+            const back = w.vmKick * k * 0.7;
+            e.pos.x = tx - fx * k + back + bobX + w.swayX;
+            e.pos.y = ty - fy * k + back + bobY + fall + w.swayY + w.swap * h * 0.8;
+            e.angle = w.vmKick * 0.0012;
             e.vmH = h; e.vmW = wide;
             e.hidden = w.mode === "dead";
         },
