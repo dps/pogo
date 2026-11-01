@@ -226,11 +226,15 @@ export class Input {
         }
     }
 
+    private padsBlocked = false;
+
     private pollGamepads() {
-        const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : null;
         this.padStick.set(0, 0, 0);
         this.padLook.set(0, 0, 0);
-        if (!pads) return;
+        if (this.padsBlocked || typeof navigator === "undefined" || !navigator.getGamepads) return;
+        let pads: (Gamepad | null)[];
+        // Embeds can forbid gamepads through a permissions policy, and then this throws on every call.
+        try { pads = navigator.getGamepads(); } catch { this.padsBlocked = true; return; }
         const dz = (v: number) => (Math.abs(v) < 0.18 ? 0 : v);
         for (const pad of pads) {
             if (!pad) continue;

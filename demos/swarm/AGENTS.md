@@ -182,6 +182,8 @@ What makes art read as good: a limited palette per game; every character outline
 
 Errors are `PogoError` with a code and a hint, such as `[UNKNOWN_SPRITE] ... Did you mean "hero"?`. In a browser they fill the screen. `pogo check` reports them with a stack.
 
+Embeds can block gamepads, storage, audio, vibration and pointer lock. Pogo turns each one off quietly and the game keeps running. If `mouseLook` can't capture the mouse, `input.touchMode` turns on and the mouse drives the touch controls, so a first-person game needs `touch.look` to stay playable there.
+
 Audit codes: `OFFSCREEN_UI`, `SAFE_AREA`, `UNREACHABLE_ACTION` fail the check; `TEXT_TOO_SMALL`, `TAP_TARGET_SMALL`, `UI_OVERLAP`, `COVERS_CONTROLS` warn. Headless text widths are estimates, so confirm tight text in `pogo shot`.
 
 ## Not included

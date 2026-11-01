@@ -248,6 +248,7 @@ declare class Audio$1 {
 	private buffers;
 	private music;
 	private unlocked;
+	private blocked;
 	constructor(game: Game);
 	private ensure;
 	/** Browsers only allow audio after a user gesture; the DOM layer calls this on the first one. */
@@ -418,6 +419,7 @@ export declare class Input {
 	/** @internal */
 	beginStep(): void;
 	private handlePointer;
+	private padsBlocked;
 	private pollGamepads;
 }
 export interface TextStyle {

@@ -823,11 +823,17 @@ var Audio = class {
   buffers = /* @__PURE__ */ new Map();
   music = null;
   unlocked = false;
+  blocked = false;
   ensure() {
-    if (this.ctx || this.game.headless) return this.ctx;
+    if (this.ctx || this.blocked || this.game.headless) return this.ctx;
     const Ctor = window.AudioContext ?? window.webkitAudioContext;
     if (!Ctor) return null;
-    this.ctx = new Ctor();
+    try {
+      this.ctx = new Ctor();
+    } catch {
+      this.blocked = true;
+      return null;
+    }
     this.master = this.ctx.createGain();
     this.master.connect(this.ctx.destination);
     const n = Math.floor(this.ctx.sampleRate * 0.5);
@@ -840,13 +846,16 @@ var Audio = class {
   unlock() {
     if (this.unlocked && this.ctx?.state === "running") return;
     this.unlocked = true;
-    this.ensure()?.resume();
+    this.ensure()?.resume().catch(() => {
+    });
   }
   suspend() {
-    this.ctx?.suspend();
+    this.ctx?.suspend().catch(() => {
+    });
   }
   resume() {
-    if (this.unlocked) this.ctx?.resume();
+    if (this.unlocked) this.ctx?.resume().catch(() => {
+    });
   }
   register(name) {
     this.buffers.set(name, null);
@@ -1345,11 +1354,18 @@ var Input = class {
       else if (dist >= 32 && p.steps < 45) this._swipe = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? "right" : "left" : dy > 0 ? "down" : "up";
     }
   }
+  padsBlocked = false;
   pollGamepads() {
-    const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : null;
     this.padStick.set(0, 0, 0);
     this.padLook.set(0, 0, 0);
-    if (!pads) return;
+    if (this.padsBlocked || typeof navigator === "undefined" || !navigator.getGamepads) return;
+    let pads;
+    try {
+      pads = navigator.getGamepads();
+    } catch {
+      this.padsBlocked = true;
+      return;
+    }
     const dz = (v) => Math.abs(v) < 0.18 ? 0 : v;
     for (const pad of pads) {
       if (!pad) continue;
@@ -3734,7 +3750,10 @@ var Game = class {
   }
   /** Haptic pulse on phones that support it. */
   vibrate(ms = 12) {
-    if (typeof navigator !== "undefined") navigator.vibrate?.(ms);
+    try {
+      if (typeof navigator !== "undefined") navigator.vibrate?.(ms);
+    } catch {
+    }
   }
   /** Persist a JSON value. Web views can block storage, so this falls back to memory. */
   save(key, value) {
@@ -3812,12 +3831,23 @@ var Game = class {
       return { x: (e.clientX - r.left - v.x) / v.scale, y: (e.clientY - r.top - v.y) / v.scale };
     };
     const unlock = () => this.audio.unlock();
+    let lockWorked = false, lockRefused = false;
+    const refuseLock = () => {
+      if (!lockWorked) {
+        lockRefused = true;
+        input.touchMode = true;
+      }
+    };
+    document.addEventListener("pointerlockchange", () => {
+      lockWorked ||= this.pointerLocked;
+    });
+    document.addEventListener("pointerlockerror", refuseLock);
     c.addEventListener("pointerdown", (e) => {
       unlock();
       c.focus({ preventScroll: true });
       if (e.pointerType === "touch") input.touchMode = true;
-      else if (e.pointerType === "mouse" && !q.has("touch")) input.touchMode = false;
-      if (e.pointerType === "mouse" && this._mouseLook && !this.pointerLocked) c.requestPointerLock?.();
+      else if (e.pointerType === "mouse" && !q.has("touch") && !lockRefused) input.touchMode = false;
+      if (e.pointerType === "mouse" && this._mouseLook && !this.pointerLocked && !lockRefused) c.requestPointerLock?.()?.catch?.(refuseLock);
       try {
         c.setPointerCapture(e.pointerId);
       } catch {

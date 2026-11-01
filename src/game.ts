@@ -301,7 +301,7 @@ export class Game {
     music(song: Song) { this.audio.playMusic(song); }
     stopMusic() { this.audio.stopMusic(); }
     /** Haptic pulse on phones that support it. */
-    vibrate(ms: number | number[] = 12) { if (typeof navigator !== "undefined") navigator.vibrate?.(ms); }
+    vibrate(ms: number | number[] = 12) { try { if (typeof navigator !== "undefined") navigator.vibrate?.(ms); } catch { /* blocked by the embedder */ } }
 
     /** Persist a JSON value. Web views can block storage, so this falls back to memory. */
     save(key: string, value: unknown) {
@@ -376,12 +376,18 @@ export class Game {
             return { x: (e.clientX - r.left - v.x) / v.scale, y: (e.clientY - r.top - v.y) / v.scale };
         };
         const unlock = () => this.audio.unlock();
+        // Sandboxed frames never grant the lock, so the mouse drives the touch controls, which can look by dragging.
+        // A lock that has worked before can still fail briefly after Esc, and that isn't a refusal.
+        let lockWorked = false, lockRefused = false;
+        const refuseLock = () => { if (!lockWorked) { lockRefused = true; input.touchMode = true; } };
+        document.addEventListener("pointerlockchange", () => { lockWorked ||= this.pointerLocked; });
+        document.addEventListener("pointerlockerror", refuseLock);
         c.addEventListener("pointerdown", (e) => {
             unlock();
             c.focus({ preventScroll: true });
             if (e.pointerType === "touch") input.touchMode = true;
-            else if (e.pointerType === "mouse" && !q.has("touch")) input.touchMode = false;
-            if (e.pointerType === "mouse" && this._mouseLook && !this.pointerLocked) c.requestPointerLock?.();
+            else if (e.pointerType === "mouse" && !q.has("touch") && !lockRefused) input.touchMode = false;
+            if (e.pointerType === "mouse" && this._mouseLook && !this.pointerLocked && !lockRefused) (c.requestPointerLock?.() as unknown as Promise<void> | undefined)?.catch?.(refuseLock);
             try { c.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
             const p = toView(e);
             input.pointerEvent("down", e.pointerId, p.x, p.y);

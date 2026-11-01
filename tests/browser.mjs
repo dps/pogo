@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { build } from "esbuild";
 import { chromium } from "playwright-core";
 
 const ROOT = resolve(import.meta.dirname, ".."), SHOTS = process.env.SHOTS_DIR ?? join(ROOT, "tests/.shots"), PORT = 5191;
@@ -196,6 +197,56 @@ try {
         const inNode = (0, eval)(`(${script})`)();
         const same = inBrowser.length === 400 && JSON.stringify(inBrowser) === JSON.stringify(inNode);
         check("simulation: headless Node matches Chrome exactly over 400 steps", same, `checksum ${inBrowser.at(-1)} / ${inNode.at(-1)}`);
+        await ctx.close();
+    }
+
+    // --- Locked-down embeds --------------------------------------------------------------------
+    // A sandboxed frame on an opaque origin with gamepads, storage and pointer lock blocked, like a hosted preview.
+    for (const name of ["flock", "shooter"]) {
+        const { outputFiles } = await build({ entryPoints: [join(ROOT, `demos/${name}/game.js`)], bundle: true, format: "esm", write: false });
+        const js = outputFiles[0].text.replaceAll("</script", "<\\/script");
+        const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+        await ctx.route("**/embed/host.html", (r) => r.fulfill({ contentType: "text/html", headers: { "Permissions-Policy": "gamepad=()" },
+            body: `<!doctype html><body style="margin:0"><iframe sandbox="allow-scripts" src="frame.html" style="position:fixed;inset:0;width:100%;height:100%;border:0"></iframe>` }));
+        await ctx.route("**/embed/frame.html", (r) => r.fulfill({ contentType: "text/html", headers: { "Permissions-Policy": "gamepad=()" },
+            body: `<!doctype html><body><script type="module">${js}</script>` }));
+        const page = await ctx.newPage();
+        const errors = [];
+        page.on("pageerror", (e) => errors.push(e.message));
+        await page.goto(`http://localhost:${PORT}/embed/host.html`);
+        const frame = page.frames().find((f) => f.url().endsWith("frame.html"));
+        await frame.waitForFunction(() => globalThis.__pogo?.stepCount > 0, null, { timeout: 15000 }).catch(() => {});
+        const blocked = await frame.evaluate(() => { try { navigator.getGamepads(); return false; } catch { return true; } });
+        await frame.evaluate(() => {
+            const g = globalThis.__pogo;
+            g.mouseLook = true;
+            g.sfx("coin");
+            g.vibrate(10);
+            g.save("k", 1);
+            return g.load("k");
+        }).catch((e) => errors.push(e.message));
+        await page.mouse.click(640, 360);
+        await page.waitForTimeout(600);
+        const after = await frame.evaluate(() => ({ step: globalThis.__pogo?.stepCount ?? 0, screen: document.querySelector("pre")?.textContent.slice(0, 120) ?? "" }));
+        await page.waitForTimeout(300);
+        const later = await frame.evaluate(() => globalThis.__pogo?.stepCount ?? 0);
+        if (name === "shooter") {
+            await frame.evaluate(() => { const g = globalThis.__pogo; g.go("play", { level: 0 }); });
+            await page.waitForTimeout(800);
+            await page.mouse.click(900, 300);
+            await page.waitForTimeout(300);
+            const aim = () => frame.evaluate(() => { const s = globalThis.__pogo.current, t = s.cam3.target, p = s.cam3.pos; return { yaw: Math.atan2(t.x - p.x, t.z - p.z), paused: s.paused, touch: s.input.touchMode, scene: globalThis.__pogo.currentName }; });
+            const a = await aim();
+            await page.mouse.move(900, 300);
+            await page.mouse.down();
+            await page.mouse.move(1050, 300, { steps: 8 });
+            await page.waitForTimeout(200);
+            await page.mouse.up();
+            const b = await aim();
+            check("embed: shooter stays playable by mouse without pointer lock", a.scene === "play" && a.touch && !b.paused && Math.abs(b.yaw - a.yaw) > 0.05, JSON.stringify({ a, b }));
+        }
+        check(`embed: ${name} keeps running with restricted APIs blocked`, blocked && !after.screen && later > after.step && !errors.length,
+            `gamepad blocked: ${blocked}, steps ${after.step} -> ${later}${after.screen ? `, screen: ${after.screen}` : ""}${errors.length ? `, errors: ${errors.join(" | ").slice(0, 160)}` : ""}`);
         await ctx.close();
     }
 

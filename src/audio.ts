@@ -53,14 +53,16 @@ export class Audio {
     private buffers = new Map<string, AudioBuffer | null>();
     private music: { timer: ReturnType<typeof setInterval>; gain: GainNode } | null = null;
     private unlocked = false;
+    private blocked = false;
 
     constructor(private game: Game) {}
 
     private ensure() {
-        if (this.ctx || this.game.headless) return this.ctx;
+        if (this.ctx || this.blocked || this.game.headless) return this.ctx;
         const Ctor = (window as any).AudioContext ?? (window as any).webkitAudioContext;
         if (!Ctor) return null;
-        this.ctx = new Ctor() as AudioContext;
+        // A blocked or exhausted audio device means a silent game, not a dead one.
+        try { this.ctx = new Ctor() as AudioContext; } catch { this.blocked = true; return null; }
         this.master = this.ctx.createGain();
         this.master.connect(this.ctx.destination);
         const n = Math.floor(this.ctx.sampleRate * 0.5);
@@ -74,10 +76,10 @@ export class Audio {
     unlock() {
         if (this.unlocked && this.ctx?.state === "running") return;
         this.unlocked = true;
-        this.ensure()?.resume();
+        this.ensure()?.resume().catch(() => {});
     }
-    suspend() { this.ctx?.suspend(); }
-    resume() { if (this.unlocked) this.ctx?.resume(); }
+    suspend() { this.ctx?.suspend().catch(() => {}); }
+    resume() { if (this.unlocked) this.ctx?.resume().catch(() => {}); }
 
     register(name: string) { this.buffers.set(name, null); }
     async load(name: string, url: string) {
