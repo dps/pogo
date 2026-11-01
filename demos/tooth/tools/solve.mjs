@@ -7,7 +7,7 @@ import { writeFileSync } from "node:fs";
 
 const W = buildWorld();
 if (W.errors.length) { console.log(W.errors.join("\n")); process.exit(1); }
-const verbose = process.argv.includes("-v"), CAP = Number(process.argv.find((a) => a.startsWith("--cap="))?.slice(6) ?? 30000);
+const verbose = process.argv.includes("-v"), CAP = Number(process.argv.find((a) => a.startsWith("--cap="))?.slice(6) ?? 200000);
 
 // Milestones in intended order: what must be reachable, and what it grants.
 export const ORDER = [
